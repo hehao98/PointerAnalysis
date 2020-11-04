@@ -10,7 +10,7 @@ import java.util.*;
 
 
 public class Main {
-    public static void main(String[] args) throws IOException {
+    public static void main2(String[] args) throws IOException {
         // Modify this line to a rt.jar, typically in /path/to/JDK/jre/lib/rt.jar
         Scene.v().setSootClassPath("/Library/Java/JavaVirtualMachines/jdk1.7.0_80.jdk/Contents/Home/jre/lib/rt.jar");
         Scene.v().loadClassAndSupport("java.lang.Object");
