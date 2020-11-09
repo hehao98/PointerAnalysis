@@ -1,6 +1,8 @@
 target/
 sootOutput/
 .idea/
+result*.txt
+analyzer.jar
 
 # Compiled class file
 *.class
