@@ -15,7 +15,7 @@ then
 fi
 for class in "${classes[@]}"; do
     rm result.txt
-    java -jar analyzer.jar sootOutput test.$class
+    java -jar analyzer.jar sootOutput test."$class"
     if [ -f result.txt ]
     then
         cp result.txt result-"$class".txt
