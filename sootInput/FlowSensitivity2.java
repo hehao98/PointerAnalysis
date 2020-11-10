@@ -13,11 +13,11 @@ public class FlowSensitivity2 {
         BenchmarkN.alloc(2);
         A b = new A();
 
-        FlowSensitivity2.x = a;
-        BenchmarkN.test(1, FlowSensitivity2.x);
+        x = a;
+        BenchmarkN.test(1, x);
 
-        FlowSensitivity2.x = b;
-        BenchmarkN.test(2, FlowSensitivity2.x);
+        x = b;
+        BenchmarkN.test(2, x);
     }
 
 }
