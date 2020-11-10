@@ -6,15 +6,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import soot.Local;
 
 public class Anderson {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PointerAnalyzer.class);
+
     public static class AssignConstraint {
         Local from, to;
 
         AssignConstraint(Local from, Local to) {
             this.from = from;
             this.to = to;
+        }
+
+        @Override
+        public String toString() {
+            return "AssignConstraint{" +
+                    "from=" + from +
+                    ", to=" + to +
+                    '}';
         }
     }
 
@@ -25,6 +38,14 @@ public class Anderson {
         NewConstraint(int allocId, Local to) {
             this.allocId = allocId;
             this.to = to;
+        }
+
+        @Override
+        public String toString() {
+            return "NewConstraint{" +
+                    "to=" + to +
+                    ", allocId=" + allocId +
+                    '}';
         }
     }
 
@@ -41,9 +62,10 @@ public class Anderson {
     }
 
     void run() {
+        LOG.info("Anderson running on newConstraints = {}, assignConstraints = {}", newConstraintList, assignConstraintList);
         for (NewConstraint nc : newConstraintList) {
             if (!pts.containsKey(nc.to)) {
-                pts.put(nc.to, new TreeSet<Integer>());
+                pts.put(nc.to, new TreeSet<>());
             }
             pts.get(nc.to).add(nc.allocId);
         }
@@ -66,5 +88,4 @@ public class Anderson {
     TreeSet<Integer> getPointsToSet(Local local) {
         return pts.get(local);
     }
-
 }

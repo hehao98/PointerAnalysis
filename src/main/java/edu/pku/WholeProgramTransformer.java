@@ -1,10 +1,10 @@
 package edu.pku;
 
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import soot.Local;
 import soot.MethodOrMethodContext;
 import soot.Scene;
@@ -22,21 +22,35 @@ import soot.util.queue.QueueReader;
 
 public class WholeProgramTransformer extends SceneTransformer {
 
+    private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
+
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
 
         TreeMap<Integer, Local> queries = new TreeMap<>();
         Anderson anderson = new Anderson();
 
+        // Find the entry point with which the real program begins (exclude JDK built-in entry points)
+        List<SootMethod> entryPoints = new ArrayList<>();
+        for (SootMethod sm : Scene.v().getEntryPoints()) {
+            if (!sm.getDeclaringClass().isJavaLibraryClass()) {
+                entryPoints.add(sm);
+            }
+        }
+        LOG.info("Entry points for this program: {}", entryPoints);
+
+        //ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
         while (qr.hasNext()) {
             SootMethod sm = qr.next().method();
-            //if (sm.toString().contains("Hello")) {
-            //System.out.println(sm);
+            if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
+                continue;
+            LOG.info("Analyzing method {}", sm.toString());
             int allocId = 0;
             if (sm.hasActiveBody()) {
                 for (Unit u : sm.getActiveBody().getUnits()) {
+                    LOG.info("{}: {}", u.getClass(), u);
                     //System.out.println("S: " + u);
                     //System.out.println(u.getClass());
                     if (u instanceof InvokeStmt) {
@@ -65,6 +79,8 @@ public class WholeProgramTransformer extends SceneTransformer {
         }
 
         anderson.run();
+
+        LOG.info("Queries: {}", queries);
         String answer = "";
         for (Entry<Integer, Local> q : queries.entrySet()) {
             TreeSet<Integer> result = anderson.getPointsToSet(q.getValue());
