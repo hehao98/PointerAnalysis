@@ -31,6 +31,48 @@ public class Anderson {
         }
     }
 
+    public static class AssignFromHeapConstraint {
+        Local from;
+        Local to;
+        String name; // field name, null if not a field reference
+
+        AssignFromHeapConstraint(Local from, Local to, String name) {
+            this.from = from;
+            this.to = to;
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return "AssignConstraint{" +
+                    "from=" + from +
+                    (name == null ? "" : ("." + name)) +
+                    ", to=" + to +
+                    '}';
+        }
+    }
+
+    public static class AssignToHeapConstraint {
+        Local from;
+        Local to;
+        String name; // field name, null if not a field reference
+
+        AssignToHeapConstraint(Local from, Local to, String name) {
+            this.from = from;
+            this.to = to;
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return "AssignConstraint{" +
+                    "from=" + from +
+                    ", to=" + to +
+                    (name == null ? "" : ("." + name)) +
+                    '}';
+        }
+    }
+
     public static class NewConstraint {
         Local to;
         int allocId;
@@ -49,12 +91,22 @@ public class Anderson {
         }
     }
 
-    private final List<AssignConstraint> assignConstraintList = new ArrayList<>();
+    private final List<AssignConstraint> assignConstraints = new ArrayList<>();
+    private final List<AssignFromHeapConstraint> assignFromHeapConstraints = new ArrayList<>();
+    private final List<AssignToHeapConstraint> assignToHeapConstraints = new ArrayList<>();
     private final List<NewConstraint> newConstraintList = new ArrayList<>();
     Map<Local, TreeSet<Integer>> pts = new HashMap<>();
 
     void addAssignConstraint(Local from, Local to) {
-        assignConstraintList.add(new AssignConstraint(from, to));
+        assignConstraints.add(new AssignConstraint(from, to));
+    }
+
+    void addAssignFromHeapConstraint(Local from, Local to, String field) {
+        assignFromHeapConstraints.add(new AssignFromHeapConstraint(from, to, field));
+    }
+
+    void addAssignToHeapConstraint(Local from, Local to, String field) {
+        assignToHeapConstraints.add(new AssignToHeapConstraint(from, to, field));
     }
 
     void addNewConstraint(int alloc, Local to) {
@@ -63,7 +115,7 @@ public class Anderson {
 
     void run() {
         LOG.info("Anderson running on newConstraints = {}", newConstraintList);
-        LOG.info("Anderson running on assignConstraints = {}", assignConstraintList);
+        LOG.info("Anderson running on assignConstraints = {}", assignConstraints);
         for (NewConstraint nc : newConstraintList) {
             if (!pts.containsKey(nc.to)) {
                 pts.put(nc.to, new TreeSet<>());
@@ -72,7 +124,7 @@ public class Anderson {
         }
         for (boolean flag = true; flag; ) {
             flag = false;
-            for (AssignConstraint ac : assignConstraintList) {
+            for (AssignConstraint ac : assignConstraints) {
                 if (!pts.containsKey(ac.from)) {
                     continue;
                 }
@@ -83,6 +135,8 @@ public class Anderson {
                     flag = true;
                 }
             }
+            // TODO solve constraints here
+            //for AssignFromHeapConstraint ac
         }
         LOG.info("Solved point2Set = {}", pts);
     }

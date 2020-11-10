@@ -62,19 +62,36 @@ public class WholeProgramTransformer extends SceneTransformer {
                         DefinitionStmt ds = (DefinitionStmt) u;
                         if (ds.getRightOp() instanceof NewExpr) {
                             anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
-                        }
-                        if (ds.getLeftOp() instanceof Local) {
+                        } else if (ds.getLeftOp() instanceof Local) {
                             if (ds.getRightOp() instanceof Local) {
-                                anderson.addAssignConstraint((Local)ds.getRightOp(), (Local)ds.getLeftOp());
+                                anderson.addAssignConstraint((Local) ds.getRightOp(), (Local) ds.getLeftOp());
+                            } else if (ds.getRightOp() instanceof InstanceFieldRef) {
+                                InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
+                                if (ifr.getBase() instanceof Local) {
+                                    anderson.addAssignFromHeapConstraint((Local) ifr.getBase(), (Local) ds.getLeftOp(), ifr.getField().getName());
+                                } else {
+                                    LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
+                                }
+                            } else {
+                                LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
                             }
-                            if (ds.getRightOp() instanceof FieldRef) {
-                                //((FieldRef)ds).getFieldRef()
+                        } else if (ds.getLeftOp() instanceof InstanceFieldRef) {
+                            InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
+                            if (lhs.getBase() instanceof Local) {
+                                if (ds.getRightOp() instanceof Local) {
+                                    anderson.addAssignToHeapConstraint((Local)lhs.getBase(), (Local) ds.getLeftOp(), lhs.getField().getName());
+                                } else {
+                                    LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
+                                }
+                            } else {
+                                LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
                             }
+                        } else {
+                            LOG.error("Unknown DefinitionStmt.getLeftOP() base type: {}", ds.getLeftOp().getClass());
                         }
                     }
                 }
             }
-            //}
         }
 
         anderson.run();
