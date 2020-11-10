@@ -12,7 +12,7 @@ import soot.Local;
 
 public class Anderson {
 
-    private static final Logger LOG = LoggerFactory.getLogger(PointerAnalyzer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Anderson.class);
 
     public static class AssignConstraint {
         Local from, to;
@@ -62,7 +62,8 @@ public class Anderson {
     }
 
     void run() {
-        LOG.info("Anderson running on newConstraints = {}, assignConstraints = {}", newConstraintList, assignConstraintList);
+        LOG.info("Anderson running on newConstraints = {}", newConstraintList);
+        LOG.info("Anderson running on assignConstraints = {}", assignConstraintList);
         for (NewConstraint nc : newConstraintList) {
             if (!pts.containsKey(nc.to)) {
                 pts.put(nc.to, new TreeSet<>());
@@ -83,6 +84,7 @@ public class Anderson {
                 }
             }
         }
+        LOG.info("Solved point2Set = {}", pts);
     }
 
     TreeSet<Integer> getPointsToSet(Local local) {

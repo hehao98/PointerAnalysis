@@ -12,11 +12,7 @@ import soot.SceneTransformer;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
-import soot.jimple.DefinitionStmt;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeExpr;
-import soot.jimple.InvokeStmt;
-import soot.jimple.NewExpr;
+import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.util.queue.QueueReader;
 
@@ -50,9 +46,7 @@ public class WholeProgramTransformer extends SceneTransformer {
             int allocId = 0;
             if (sm.hasActiveBody()) {
                 for (Unit u : sm.getActiveBody().getUnits()) {
-                    LOG.info("{}: {}", u.getClass(), u);
-                    //System.out.println("S: " + u);
-                    //System.out.println(u.getClass());
+                    LOG.info("    {}", u);
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
                         if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
@@ -65,12 +59,17 @@ public class WholeProgramTransformer extends SceneTransformer {
                         }
                     }
                     if (u instanceof DefinitionStmt) {
-                        if (((DefinitionStmt) u).getRightOp() instanceof NewExpr) {
-                            //System.out.println("Alloc " + allocId);
+                        DefinitionStmt ds = (DefinitionStmt) u;
+                        if (ds.getRightOp() instanceof NewExpr) {
                             anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
                         }
-                        if (((DefinitionStmt) u).getLeftOp() instanceof Local && ((DefinitionStmt) u).getRightOp() instanceof Local) {
-                            anderson.addAssignConstraint((Local) ((DefinitionStmt) u).getRightOp(), (Local) ((DefinitionStmt) u).getLeftOp());
+                        if (ds.getLeftOp() instanceof Local) {
+                            if (ds.getRightOp() instanceof Local) {
+                                anderson.addAssignConstraint((Local)ds.getRightOp(), (Local)ds.getLeftOp());
+                            }
+                            if (ds.getRightOp() instanceof FieldRef) {
+                                //((FieldRef)ds).getFieldRef()
+                            }
                         }
                     }
                 }

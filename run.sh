@@ -8,7 +8,7 @@ mvn clean package
 cp target/PointerAnalysis-1.0-SNAPSHOT.jar analyzer.jar
 
 res="---------- Evaluation Result Summary ----------"
-classes=( "Hello" "FieldSensitivity" "FlowSensitivity1" "FlowSensitivity2" )
+classes=( "Hello" "Hello2" "FieldSensitivity" "FlowSensitivity1" "FlowSensitivity2" )
 if [ "$#" -ge 1 ]
 then
     classes=( "$@" )

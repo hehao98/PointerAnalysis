@@ -35,7 +35,7 @@ public class PointerAnalyzer {
 												//     and generates information about the target of pointers
 			"-p", "wjtp.mypta", "enabled:true", // Enable a phase named "wjtp.mypta", as defined before
 			"-soot-class-path", classpath,      // Class paths that we concatenate before
-			"-f", "J",
+			"-f", "J",                          // Generate Jimple file in the args[0] folder
 			args[1]		                        // Main class name
 		});
 	}
