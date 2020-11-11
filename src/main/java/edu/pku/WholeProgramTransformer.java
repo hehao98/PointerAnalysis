@@ -14,17 +14,66 @@ import soot.Unit;
 import soot.Value;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
+import soot.jimple.toolkits.invoke.SiteInliner;
 import soot.util.queue.QueueReader;
 
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
+    private final TreeMap<Integer, Local> queries = new TreeMap<>();
+    private final Set<Integer> allocIds = new TreeSet<>();
+    private final Anderson anderson = new Anderson();
+
+    private void extractConstraints(List<SootMethod> methodsToAnalyze) {
+        int allocId = 0;
+        for (SootMethod sm : methodsToAnalyze) {
+            LOG.info("Analyzing method {}", sm.toString());
+            for (Unit u : sm.getActiveBody().getUnits()) {
+                LOG.info("    {}", u);
+                if (u instanceof InvokeStmt) {
+                    InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
+                    if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                        allocId = ((IntConstant) ie.getArgs().get(0)).value;
+                        allocIds.add(allocId);
+                    }
+                } else if (u instanceof DefinitionStmt) {
+                    DefinitionStmt ds = (DefinitionStmt) u;
+                    if (ds.getRightOp() instanceof NewExpr) {
+                        anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
+                    } else if (ds.getLeftOp() instanceof Local) {
+                        if (ds.getRightOp() instanceof Local) {
+                            anderson.addAssignConstraint((Local) ds.getRightOp(), (Local) ds.getLeftOp());
+                        } else if (ds.getRightOp() instanceof InstanceFieldRef) {
+                            InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
+                            if (ifr.getBase() instanceof Local) {
+                                anderson.addAssignFromHeapConstraint((Local) (ifr.getBase()), (Local) ds.getLeftOp(), ifr.getField().getName());
+                            } else {
+                                LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
+                            }
+                        } else {
+                            LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
+                        }
+                    } else if (ds.getLeftOp() instanceof InstanceFieldRef) {
+                        InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
+                        if (lhs.getBase() instanceof Local) {
+                            if (ds.getRightOp() instanceof Local) {
+                                anderson.addAssignToHeapConstraint((Local) ds.getRightOp(), (Local) (lhs.getBase()), lhs.getField().getName());
+                            } else {
+                                LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
+                            }
+                        } else {
+                            LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
+                        }
+                    } else {
+                        LOG.error("Unknown DefinitionStmt.getLeftOP() base type: {}", ds.getLeftOp().getClass());
+                    }
+                }
+            }
+        }
+    }
 
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
-
-        TreeMap<Integer, Local> queries = new TreeMap<>();
-        Anderson anderson = new Anderson();
 
         // Find the entry point with which the real program begins (exclude JDK built-in entry points)
         List<SootMethod> entryPoints = new ArrayList<>();
@@ -38,63 +87,38 @@ public class WholeProgramTransformer extends SceneTransformer {
         //ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
-        Set<Integer> allocIds = new TreeSet<>();
+
+        // We implement first-order context sensitivity through method inlining
+        List<SootMethod> methodsToAnalyze = new ArrayList<>();
         while (qr.hasNext()) {
             SootMethod sm = qr.next().method();
             if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
                 continue;
-            LOG.info("Analyzing method {}", sm.toString());
-            int allocId = 0;
             if (sm.hasActiveBody()) {
+                List<InvokeStmt> methodsToInline = new ArrayList<>();
                 for (Unit u : sm.getActiveBody().getUnits()) {
                     LOG.info("    {}", u);
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                            allocId = ((IntConstant) ie.getArgs().get(0)).value;
-                            allocIds.add(allocId);
-                        }
                         if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
+                            // IMPORTANT: Extract queries before inlining
                             Value v = ie.getArgs().get(1);
                             int id = ((IntConstant) ie.getArgs().get(0)).value;
                             queries.put(id, (Local) v);
-                        }
-                    }
-                    if (u instanceof DefinitionStmt) {
-                        DefinitionStmt ds = (DefinitionStmt) u;
-                        if (ds.getRightOp() instanceof NewExpr) {
-                            anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
-                        } else if (ds.getLeftOp() instanceof Local) {
-                            if (ds.getRightOp() instanceof Local) {
-                                anderson.addAssignConstraint((Local) ds.getRightOp(), (Local) ds.getLeftOp());
-                            } else if (ds.getRightOp() instanceof InstanceFieldRef) {
-                                InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
-                                if (ifr.getBase() instanceof Local) {
-                                    anderson.addAssignFromHeapConstraint((Local)(ifr.getBase()), (Local) ds.getLeftOp(), ifr.getField().getName());
-                                } else {
-                                    LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
-                                }
-                            } else {
-                                LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
-                            }
-                        } else if (ds.getLeftOp() instanceof InstanceFieldRef) {
-                            InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
-                            if (lhs.getBase() instanceof Local) {
-                                if (ds.getRightOp() instanceof Local) {
-                                    anderson.addAssignToHeapConstraint((Local)ds.getRightOp(), (Local)(lhs.getBase()), lhs.getField().getName());
-                                } else {
-                                    LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
-                                }
-                            } else {
-                                LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
-                            }
-                        } else {
-                            LOG.error("Unknown DefinitionStmt.getLeftOP() base type: {}", ds.getLeftOp().getClass());
+                        } else if (!ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                            methodsToInline.add((InvokeStmt) u);
                         }
                     }
                 }
+                // Perform inlining before the method is passed for analysis
+                for (InvokeStmt u : methodsToInline) {
+                    SiteInliner.inlineSite(u.getInvokeExpr().getMethod(), u, sm);
+                }
+                methodsToAnalyze.add(sm);
             }
         }
+
+        extractConstraints(methodsToAnalyze);
 
         anderson.run();
 
