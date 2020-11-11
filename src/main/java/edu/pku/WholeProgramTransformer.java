@@ -38,6 +38,7 @@ public class WholeProgramTransformer extends SceneTransformer {
         //ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
+        Set<Integer> allocIds = new TreeSet<>();
         while (qr.hasNext()) {
             SootMethod sm = qr.next().method();
             if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
@@ -51,6 +52,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
                         if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
                             allocId = ((IntConstant) ie.getArgs().get(0)).value;
+                            allocIds.add(allocId);
                         }
                         if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
                             Value v = ie.getArgs().get(1);
@@ -68,7 +70,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                             } else if (ds.getRightOp() instanceof InstanceFieldRef) {
                                 InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
                                 if (ifr.getBase() instanceof Local) {
-                                    anderson.addAssignFromHeapConstraint((Local) ifr.getBase(), (Local) ds.getLeftOp(), ifr.getField().getName());
+                                    anderson.addAssignFromHeapConstraint((Local)(ifr.getBase()), (Local) ds.getLeftOp(), ifr.getField().getName());
                                 } else {
                                     LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
                                 }
@@ -79,7 +81,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                             InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
                             if (lhs.getBase() instanceof Local) {
                                 if (ds.getRightOp() instanceof Local) {
-                                    anderson.addAssignToHeapConstraint((Local)lhs.getBase(), (Local) ds.getLeftOp(), lhs.getField().getName());
+                                    anderson.addAssignToHeapConstraint((Local)ds.getRightOp(), (Local)(lhs.getBase()), lhs.getField().getName());
                                 } else {
                                     LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
                                 }
@@ -97,22 +99,22 @@ public class WholeProgramTransformer extends SceneTransformer {
         anderson.run();
 
         LOG.info("Queries: {}", queries);
-        String answer = "";
+        StringBuilder answer = new StringBuilder();
         for (Entry<Integer, Local> q : queries.entrySet()) {
             TreeSet<Integer> result = anderson.getPointsToSet(q.getValue());
-            answer += q.getKey().toString() + ":";
-            if (result != null) {
+            answer.append(q.getKey().toString()).append(":");
+            if (result != null && result.size() > 0) {
                 for (Integer i : result) {
-                    answer += " " + i;
+                    answer.append(" ").append(i);
                 }
             } else {
-                for (Integer i : queries.keySet()) {
-                    answer += " " + i;
+                for (Integer i : allocIds) {
+                    answer.append(" ").append(i);
                 }
             }
-            answer += "\n";
+            answer.append("\n");
         }
-        AnswerPrinter.printAnswer(answer);
+        AnswerPrinter.printAnswer(answer.toString());
 
     }
 

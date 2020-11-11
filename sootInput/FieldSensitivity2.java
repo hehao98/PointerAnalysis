@@ -29,6 +29,8 @@ public class FieldSensitivity2 {
         a2.f = c;
         BenchmarkN.test(1, a1.f);
         BenchmarkN.test(2, a2.f);
+        b = a2.f;
+        BenchmarkN.test(3, b);
     }
 
 }
