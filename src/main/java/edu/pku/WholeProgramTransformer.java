@@ -32,7 +32,11 @@ public class WholeProgramTransformer extends SceneTransformer {
                 LOG.info("    {}", u);
                 if (u instanceof InvokeStmt) {
                     InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                    if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                    if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
+                        Value v = ie.getArgs().get(1);
+                        int id = ((IntConstant) ie.getArgs().get(0)).value;
+                        queries.put(id, (Local) v);
+                    } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
                         allocId = ((IntConstant) ie.getArgs().get(0)).value;
                         allocIds.add(allocId);
                     }
@@ -40,6 +44,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     DefinitionStmt ds = (DefinitionStmt) u;
                     if (ds.getRightOp() instanceof NewExpr) {
                         anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
+                        allocId = 0;
                     } else if (ds.getLeftOp() instanceof Local) {
                         if (ds.getRightOp() instanceof Local) {
                             anderson.addAssignConstraint((Local) ds.getRightOp(), (Local) ds.getLeftOp());
@@ -95,24 +100,25 @@ public class WholeProgramTransformer extends SceneTransformer {
             if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
                 continue;
             if (sm.hasActiveBody()) {
-                List<InvokeStmt> methodsToInline = new ArrayList<>();
+                Map<Stmt, SootMethod> methodsToInline = new HashMap<>();
                 for (Unit u : sm.getActiveBody().getUnits()) {
-                    LOG.info("    {}", u);
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
-                            // IMPORTANT: Extract queries before inlining
-                            Value v = ie.getArgs().get(1);
-                            int id = ((IntConstant) ie.getArgs().get(0)).value;
-                            queries.put(id, (Local) v);
-                        } else if (!ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                            methodsToInline.add((InvokeStmt) u);
+                        if (!ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")
+                                && !ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                            methodsToInline.put((InvokeStmt) u, ie.getMethod());
+                        }
+                    }
+                    if (u instanceof DefinitionStmt) {
+                        if (((DefinitionStmt) u).getRightOp() instanceof InvokeExpr) {
+                            InvokeExpr ie = (InvokeExpr) ((DefinitionStmt) u).getRightOp();
+                            methodsToInline.put((DefinitionStmt) u, ie.getMethod());
                         }
                     }
                 }
                 // Perform inlining before the method is passed for analysis
-                for (InvokeStmt u : methodsToInline) {
-                    SiteInliner.inlineSite(u.getInvokeExpr().getMethod(), u, sm);
+                for (Entry<Stmt, SootMethod> entry : methodsToInline.entrySet()) {
+                    SiteInliner.inlineSite(entry.getValue(), entry.getKey(), sm);
                 }
                 methodsToAnalyze.add(sm);
             }
@@ -126,9 +132,11 @@ public class WholeProgramTransformer extends SceneTransformer {
         StringBuilder answer = new StringBuilder();
         for (Entry<Integer, Local> q : queries.entrySet()) {
             TreeSet<Integer> result = anderson.getPointsToSet(q.getValue());
+            LOG.info("Query ({})={}", q, result);
             answer.append(q.getKey().toString()).append(":");
             if (result != null && result.size() > 0) {
                 for (Integer i : result) {
+                    if (i <= 0) continue;
                     answer.append(" ").append(i);
                 }
             } else {
