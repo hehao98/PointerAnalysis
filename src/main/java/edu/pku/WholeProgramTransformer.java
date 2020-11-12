@@ -23,6 +23,7 @@ public class WholeProgramTransformer extends SceneTransformer {
     private final TreeMap<Integer, Local> queries = new TreeMap<>();
     private final Set<Integer> allocIds = new TreeSet<>();
     private final Anderson anderson = new Anderson();
+    private int nextAllocId = -1;
 
     private void extractConstraints(List<SootMethod> methodsToAnalyze) {
         int allocId = 0;
@@ -43,7 +44,10 @@ public class WholeProgramTransformer extends SceneTransformer {
                 } else if (u instanceof DefinitionStmt) {
                     DefinitionStmt ds = (DefinitionStmt) u;
                     if (ds.getRightOp() instanceof NewExpr) {
-                        anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
+                        if (allocId != 0)
+                            anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
+                        else
+                            anderson.addNewConstraint(nextAllocId--, (Local) ((DefinitionStmt) u).getLeftOp());
                         allocId = 0;
                     } else if (ds.getLeftOp() instanceof Local) {
                         if (ds.getRightOp() instanceof Local) {
