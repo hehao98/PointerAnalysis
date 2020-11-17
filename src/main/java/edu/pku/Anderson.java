@@ -4,16 +4,16 @@ import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import soot.Local;
+import soot.Value;
 
 public class Anderson {
 
     private static final Logger LOG = LoggerFactory.getLogger(Anderson.class);
 
     public static class AssignConstraint {
-        Local from, to;
+        Value from, to;
 
-        AssignConstraint(Local from, Local to) {
+        AssignConstraint(Value from, Value to) {
             this.from = from;
             this.to = to;
         }
@@ -28,11 +28,11 @@ public class Anderson {
     }
 
     public static class AssignFromHeapConstraint {
-        Local from;
-        Local to;
-        String field; // field name, null if not a field reference
+        Value from;
+        Value to;
+        String field; // field name, "" if not a field reference
 
-        AssignFromHeapConstraint(Local from, Local to, String field) {
+        AssignFromHeapConstraint(Value from, Value to, String field) {
             this.from = from;
             this.to = to;
             this.field = field;
@@ -49,11 +49,11 @@ public class Anderson {
     }
 
     public static class AssignToHeapConstraint {
-        Local from;
-        Local to;
-        String field; // field name, null if not a field reference
+        Value from;
+        Value to;
+        String field; // field name, "" if not a field reference
 
-        AssignToHeapConstraint(Local from, Local to, String field) {
+        AssignToHeapConstraint(Value from, Value to, String field) {
             this.from = from;
             this.to = to;
             this.field = field;
@@ -70,10 +70,10 @@ public class Anderson {
     }
 
     public static class NewConstraint {
-        Local to;
+        Value to;
         int allocId;
 
-        NewConstraint(int allocId, Local to) {
+        NewConstraint(int allocId, Value to) {
             this.allocId = allocId;
             this.to = to;
         }
@@ -91,22 +91,22 @@ public class Anderson {
     private final List<AssignFromHeapConstraint> assignFromHeapConstraints = new ArrayList<>();
     private final List<AssignToHeapConstraint> assignToHeapConstraints = new ArrayList<>();
     private final List<NewConstraint> newConstraints = new ArrayList<>();
-    private final Map<Local, TreeSet<Integer>> pts = new HashMap<>();
+    private final Map<Value, TreeSet<Integer>> pts = new HashMap<>();
     private final Map<Integer, Map<String, TreeSet<Integer>>> id2f2s = new HashMap<>(); // (allocId -> field -> pointSet)
 
-    public void addAssignConstraint(Local from, Local to) {
+    public void addAssignConstraint(Value from, Value to) {
         assignConstraints.add(new AssignConstraint(from, to));
     }
 
-    public void addAssignFromHeapConstraint(Local from, Local to, String field) {
+    public void addAssignFromHeapConstraint(Value from, Value to, String field) {
         assignFromHeapConstraints.add(new AssignFromHeapConstraint(from, to, field));
     }
 
-    public void addAssignToHeapConstraint(Local from, Local to, String field) {
+    public void addAssignToHeapConstraint(Value from, Value to, String field) {
         assignToHeapConstraints.add(new AssignToHeapConstraint(from, to, field));
     }
 
-    public void addNewConstraint(int alloc, Local to) {
+    public void addNewConstraint(int alloc, Value to) {
         newConstraints.add(new NewConstraint(alloc, to));
     }
 
@@ -156,7 +156,7 @@ public class Anderson {
         LOG.info("Solved allocId2field2Set = {}", id2f2s);
     }
 
-    public TreeSet<Integer> getPointsToSet(Local local) {
-        return pts.get(local);
+    public TreeSet<Integer> getPointsToSet(Value value) {
+        return pts.get(value);
     }
 }

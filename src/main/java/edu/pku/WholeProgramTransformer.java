@@ -20,8 +20,9 @@ import soot.util.queue.QueueReader;
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
-    private final TreeMap<Integer, Local> queries = new TreeMap<>();
+    private final TreeMap<Integer, List<Local>> queries = new TreeMap<>();
     private final Set<Integer> allocIds = new TreeSet<>();
+    private final Map<String, Integer> staticAllocIds = new HashMap<>();
     private final Anderson anderson = new Anderson();
     private int nextAllocId = -1;
 
@@ -36,7 +37,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
                         Value v = ie.getArgs().get(1);
                         int id = ((IntConstant) ie.getArgs().get(0)).value;
-                        queries.put(id, (Local) v);
+                        queries.computeIfAbsent(id, k -> new ArrayList<>()).add((Local) v);
                     } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
                         allocId = ((IntConstant) ie.getArgs().get(0)).value;
                         allocIds.add(allocId);
@@ -45,20 +46,29 @@ public class WholeProgramTransformer extends SceneTransformer {
                     DefinitionStmt ds = (DefinitionStmt) u;
                     if (ds.getRightOp() instanceof NewExpr) {
                         if (allocId != 0)
-                            anderson.addNewConstraint(allocId, (Local) ((DefinitionStmt) u).getLeftOp());
+                            anderson.addNewConstraint(allocId, ((DefinitionStmt) u).getLeftOp());
                         else
-                            anderson.addNewConstraint(nextAllocId--, (Local) ((DefinitionStmt) u).getLeftOp());
+                            anderson.addNewConstraint(nextAllocId--, ((DefinitionStmt) u).getLeftOp());
                         allocId = 0;
                     } else if (ds.getLeftOp() instanceof Local) {
                         if (ds.getRightOp() instanceof Local) {
-                            anderson.addAssignConstraint((Local) ds.getRightOp(), (Local) ds.getLeftOp());
+                            anderson.addAssignConstraint(ds.getRightOp(), ds.getLeftOp());
                         } else if (ds.getRightOp() instanceof InstanceFieldRef) {
                             InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
                             if (ifr.getBase() instanceof Local) {
-                                anderson.addAssignFromHeapConstraint((Local) (ifr.getBase()), (Local) ds.getLeftOp(), ifr.getField().getName());
+                                anderson.addAssignFromHeapConstraint(ifr.getBase(), ds.getLeftOp(), ifr.getField().getName());
                             } else {
                                 LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
                             }
+                        } else if (ds.getRightOp() instanceof ThisRef) {
+                            ThisRef rhs = (ThisRef)(ds.getRightOp());
+                            anderson.addAssignFromHeapConstraint(rhs, ds.getLeftOp(), "");
+                        } else if (ds.getRightOp() instanceof StaticFieldRef) {
+                            StaticFieldRef rhs = (StaticFieldRef) (ds.getRightOp());
+                            String className = rhs.getField().getDeclaringClass().getName();
+                            if (!staticAllocIds.containsKey(className)) staticAllocIds.put(className, nextAllocId--);
+                            anderson.addNewConstraint(staticAllocIds.get(className), rhs);
+                            anderson.addAssignFromHeapConstraint(rhs, ds.getLeftOp(), rhs.getField().getName());
                         } else {
                             LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
                         }
@@ -66,12 +76,26 @@ public class WholeProgramTransformer extends SceneTransformer {
                         InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
                         if (lhs.getBase() instanceof Local) {
                             if (ds.getRightOp() instanceof Local) {
-                                anderson.addAssignToHeapConstraint((Local) ds.getRightOp(), (Local) (lhs.getBase()), lhs.getField().getName());
+                                anderson.addAssignToHeapConstraint(ds.getRightOp(), lhs.getBase(), lhs.getField().getName());
+                            } else if (ds.getRightOp() instanceof Constant) {
+                                // Nothing need to be done here
                             } else {
-                                LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
+                                LOG.error("Unknown InstanceFieldRef base type: {}", ds.getRightOp().getClass());
                             }
                         } else {
                             LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
+                        }
+                    } else if (ds.getLeftOp() instanceof StaticFieldRef) {
+                        StaticFieldRef lhs = (StaticFieldRef) ds.getLeftOp();
+                        String className = lhs.getField().getDeclaringClass().getName();
+                        if (!staticAllocIds.containsKey(className)) staticAllocIds.put(className, nextAllocId--);
+                        anderson.addNewConstraint(staticAllocIds.get(className), lhs);
+                        if (ds.getRightOp() instanceof Local) {
+                            anderson.addAssignToHeapConstraint(ds.getRightOp(), lhs, lhs.getField().getName());
+                        } else if (ds.getRightOp() instanceof Constant) {
+                            // Nothing need to be done here
+                        } else {
+                            LOG.error("Unknown StaticFieldRef base type: {}", ds.getRightOp().getClass());
                         }
                     } else {
                         LOG.error("Unknown DefinitionStmt.getLeftOP() base type: {}", ds.getLeftOp().getClass());
@@ -134,11 +158,17 @@ public class WholeProgramTransformer extends SceneTransformer {
 
         LOG.info("Queries: {}", queries);
         StringBuilder answer = new StringBuilder();
-        for (Entry<Integer, Local> q : queries.entrySet()) {
-            TreeSet<Integer> result = anderson.getPointsToSet(q.getValue());
-            LOG.info("Query ({})={}", q, result);
+        for (Entry<Integer, List<Local>> q : queries.entrySet()) {
+            LOG.info("Query: id={}, locals={}", q.getKey(), q.getValue());
+            TreeSet<Integer> result = new TreeSet<>();
+            for (Local local : q.getValue()) {
+                LOG.info("    local {}={}", local, anderson.getPointsToSet(local));
+                if (anderson.getPointsToSet(local) != null) {
+                    result.addAll(anderson.getPointsToSet(local));
+                }
+            }
             answer.append(q.getKey().toString()).append(":");
-            if (result != null && result.size() > 0) {
+            if (result.size() > 0) {
                 for (Integer i : result) {
                     if (i <= 0) continue;
                     answer.append(" ").append(i);
