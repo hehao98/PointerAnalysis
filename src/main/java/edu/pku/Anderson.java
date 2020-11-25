@@ -87,12 +87,14 @@ public class Anderson {
         }
     }
 
+    private static final Map<Integer, Map<String, TreeSet<Integer>>> id2f2s = new HashMap<>(); // (allocId -> field -> pointSet)
+
     private final List<AssignConstraint> assignConstraints = new ArrayList<>();
     private final List<AssignFromHeapConstraint> assignFromHeapConstraints = new ArrayList<>();
     private final List<AssignToHeapConstraint> assignToHeapConstraints = new ArrayList<>();
     private final List<NewConstraint> newConstraints = new ArrayList<>();
     private final Map<Value, TreeSet<Integer>> pts = new HashMap<>();
-    private final Map<Integer, Map<String, TreeSet<Integer>>> id2f2s = new HashMap<>(); // (allocId -> field -> pointSet)
+
 
     public void addAssignConstraint(Value from, Value to) {
         assignConstraints.add(new AssignConstraint(from, to));

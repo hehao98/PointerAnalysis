@@ -15,21 +15,22 @@ import soot.Value;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.jimple.toolkits.invoke.SiteInliner;
+import soot.toolkits.graph.DirectedGraph;
+import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.util.queue.QueueReader;
 
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
     private final TreeMap<Integer, List<Local>> queries = new TreeMap<>();
-    private final Set<Integer> allocIds = new TreeSet<>();
-    private final Map<String, Integer> staticAllocIds = new HashMap<>();
-    private final Anderson anderson = new Anderson();
-    private int nextAllocId = -1;
+    private final List<Anderson> andersonInstances = new ArrayList<>();
 
-    private void extractConstraints(List<SootMethod> methodsToAnalyze) {
+    private void analyzePointer(List<SootMethod> methodsToAnalyze) {
         int allocId = 0;
         for (SootMethod sm : methodsToAnalyze) {
             LOG.info("Analyzing method {}", sm.toString());
+            Anderson anderson = new Anderson();
+            andersonInstances.add(anderson);
             for (Unit u : sm.getActiveBody().getUnits()) {
                 LOG.info("    {}", u);
                 if (u instanceof InvokeStmt) {
@@ -40,7 +41,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                         queries.computeIfAbsent(id, k -> new ArrayList<>()).add((Local) v);
                     } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
                         allocId = ((IntConstant) ie.getArgs().get(0)).value;
-                        allocIds.add(allocId);
+                        MemoryManager.addExplicitAllocId(allocId);
                     }
                 } else if (u instanceof DefinitionStmt) {
                     DefinitionStmt ds = (DefinitionStmt) u;
@@ -48,7 +49,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                         if (allocId != 0)
                             anderson.addNewConstraint(allocId, ((DefinitionStmt) u).getLeftOp());
                         else
-                            anderson.addNewConstraint(nextAllocId--, ((DefinitionStmt) u).getLeftOp());
+                            anderson.addNewConstraint(MemoryManager.getNextAllocId(), ((DefinitionStmt) u).getLeftOp());
                         allocId = 0;
                     } else if (ds.getLeftOp() instanceof Local) {
                         if (ds.getRightOp() instanceof Local) {
@@ -66,8 +67,8 @@ public class WholeProgramTransformer extends SceneTransformer {
                         } else if (ds.getRightOp() instanceof StaticFieldRef) {
                             StaticFieldRef rhs = (StaticFieldRef) (ds.getRightOp());
                             String className = rhs.getField().getDeclaringClass().getName();
-                            if (!staticAllocIds.containsKey(className)) staticAllocIds.put(className, nextAllocId--);
-                            anderson.addNewConstraint(staticAllocIds.get(className), rhs);
+                            String fieldName = rhs.getField().getName();
+                            anderson.addNewConstraint(MemoryManager.putStaticAllocId(className, fieldName), rhs);
                             anderson.addAssignFromHeapConstraint(rhs, ds.getLeftOp(), rhs.getField().getName());
                         } else {
                             LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
@@ -88,8 +89,8 @@ public class WholeProgramTransformer extends SceneTransformer {
                     } else if (ds.getLeftOp() instanceof StaticFieldRef) {
                         StaticFieldRef lhs = (StaticFieldRef) ds.getLeftOp();
                         String className = lhs.getField().getDeclaringClass().getName();
-                        if (!staticAllocIds.containsKey(className)) staticAllocIds.put(className, nextAllocId--);
-                        anderson.addNewConstraint(staticAllocIds.get(className), lhs);
+                        String fieldName = lhs.getField().getName();
+                        anderson.addNewConstraint(MemoryManager.putStaticAllocId(className, fieldName), lhs);
                         if (ds.getRightOp() instanceof Local) {
                             anderson.addAssignToHeapConstraint(ds.getRightOp(), lhs, lhs.getField().getName());
                         } else if (ds.getRightOp() instanceof Constant) {
@@ -102,6 +103,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     }
                 }
             }
+            anderson.run();
         }
     }
 
@@ -117,7 +119,11 @@ public class WholeProgramTransformer extends SceneTransformer {
         }
         LOG.info("Entry points for this program: {}", entryPoints);
 
-        //ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
+        SootMethod m = Scene.v().getMainClass().getMethodByName("main");
+
+        // Build local DFG with exceptions
+        DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
+        // ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
 
@@ -152,9 +158,7 @@ public class WholeProgramTransformer extends SceneTransformer {
             }
         }
 
-        extractConstraints(methodsToAnalyze);
-
-        anderson.run();
+        analyzePointer(methodsToAnalyze);
 
         LOG.info("Queries: {}", queries);
         StringBuilder answer = new StringBuilder();
@@ -162,26 +166,32 @@ public class WholeProgramTransformer extends SceneTransformer {
             LOG.info("Query: id={}, locals={}", q.getKey(), q.getValue());
             TreeSet<Integer> result = new TreeSet<>();
             for (Local local : q.getValue()) {
-                LOG.info("    local {}={}", local, anderson.getPointsToSet(local));
-                if (anderson.getPointsToSet(local) != null) {
-                    result.addAll(anderson.getPointsToSet(local));
+                for (Anderson anderson : andersonInstances) {
+                    LOG.info("    local {}={}", local, anderson.getPointsToSet(local));
+                    if (anderson.getPointsToSet(local) != null) {
+                        result.addAll(anderson.getPointsToSet(local));
+                    }
                 }
             }
             answer.append(q.getKey().toString()).append(":");
             if (result.size() > 0) {
+                // boolean hasImplicitAllocId = false;
                 for (Integer i : result) {
-                    if (i <= 0) continue;
+                    if (i <= 0) {
+                        // hasImplicitAllocId = true;
+                        // answer.append(" ").append(0);
+                        continue;
+                    }
                     answer.append(" ").append(i);
                 }
             } else {
-                for (Integer i : allocIds) {
+                for (Integer i : MemoryManager.getAllocIds()) {
                     answer.append(" ").append(i);
                 }
             }
             answer.append("\n");
         }
         AnswerPrinter.printAnswer(answer.toString());
-
     }
 
 }

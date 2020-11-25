@@ -9,7 +9,7 @@ cp target/PointerAnalysis-1.0-SNAPSHOT.jar analyzer.jar
 
 res="---------- Evaluation Result Summary ----------"
 classes=( "Hello" "Hello2" "FieldSensitivity" "FieldSensitivity2" "FlowSensitivity1" "FlowSensitivity2"
-          "PointerInHeap" "ContextSensitivity1" "Function" "Function2" "StaticFieldRef")
+          "PointerInHeap" "ContextSensitivity1" "Function" "Function2" "StaticFieldRef" "ImplicitAllocId")
 if [ "$#" -ge 1 ]
 then
     classes=( "$@" )
