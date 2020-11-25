@@ -5,13 +5,11 @@ import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import soot.Local;
 import soot.MethodOrMethodContext;
 import soot.Scene;
 import soot.SceneTransformer;
 import soot.SootMethod;
 import soot.Unit;
-import soot.Value;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.jimple.toolkits.invoke.SiteInliner;
@@ -22,88 +20,14 @@ import soot.util.queue.QueueReader;
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
-    private final TreeMap<Integer, List<Local>> queries = new TreeMap<>();
-    private final List<Anderson> andersonInstances = new ArrayList<>();
+
 
     private void analyzePointer(List<SootMethod> methodsToAnalyze) {
-        int allocId = 0;
         for (SootMethod sm : methodsToAnalyze) {
             LOG.info("Analyzing method {}", sm.toString());
-            Anderson anderson = new Anderson();
-            andersonInstances.add(anderson);
-            for (Unit u : sm.getActiveBody().getUnits()) {
-                LOG.info("    {}", u);
-                if (u instanceof InvokeStmt) {
-                    InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                    if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
-                        Value v = ie.getArgs().get(1);
-                        int id = ((IntConstant) ie.getArgs().get(0)).value;
-                        queries.computeIfAbsent(id, k -> new ArrayList<>()).add((Local) v);
-                    } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                        allocId = ((IntConstant) ie.getArgs().get(0)).value;
-                        MemoryManager.addExplicitAllocId(allocId);
-                    }
-                } else if (u instanceof DefinitionStmt) {
-                    DefinitionStmt ds = (DefinitionStmt) u;
-                    if (ds.getRightOp() instanceof NewExpr) {
-                        if (allocId != 0)
-                            anderson.addNewConstraint(allocId, ((DefinitionStmt) u).getLeftOp());
-                        else
-                            anderson.addNewConstraint(MemoryManager.getNextAllocId(), ((DefinitionStmt) u).getLeftOp());
-                        allocId = 0;
-                    } else if (ds.getLeftOp() instanceof Local) {
-                        if (ds.getRightOp() instanceof Local) {
-                            anderson.addAssignConstraint(ds.getRightOp(), ds.getLeftOp());
-                        } else if (ds.getRightOp() instanceof InstanceFieldRef) {
-                            InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
-                            if (ifr.getBase() instanceof Local) {
-                                anderson.addAssignFromHeapConstraint(ifr.getBase(), ds.getLeftOp(), ifr.getField().getName());
-                            } else {
-                                LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
-                            }
-                        } else if (ds.getRightOp() instanceof ThisRef) {
-                            ThisRef rhs = (ThisRef)(ds.getRightOp());
-                            anderson.addAssignFromHeapConstraint(rhs, ds.getLeftOp(), "");
-                        } else if (ds.getRightOp() instanceof StaticFieldRef) {
-                            StaticFieldRef rhs = (StaticFieldRef) (ds.getRightOp());
-                            String className = rhs.getField().getDeclaringClass().getName();
-                            String fieldName = rhs.getField().getName();
-                            anderson.addNewConstraint(MemoryManager.putStaticAllocId(className, fieldName), rhs);
-                            anderson.addAssignFromHeapConstraint(rhs, ds.getLeftOp(), rhs.getField().getName());
-                        } else {
-                            LOG.error("Unknown DefinitionStmt.getRightOP() base type: {}", ds.getRightOp().getClass());
-                        }
-                    } else if (ds.getLeftOp() instanceof InstanceFieldRef) {
-                        InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
-                        if (lhs.getBase() instanceof Local) {
-                            if (ds.getRightOp() instanceof Local) {
-                                anderson.addAssignToHeapConstraint(ds.getRightOp(), lhs.getBase(), lhs.getField().getName());
-                            } else if (ds.getRightOp() instanceof Constant) {
-                                // Nothing need to be done here
-                            } else {
-                                LOG.error("Unknown InstanceFieldRef base type: {}", ds.getRightOp().getClass());
-                            }
-                        } else {
-                            LOG.error("Unknown InstanceFieldRef base type: {}", lhs.getBase().getClass());
-                        }
-                    } else if (ds.getLeftOp() instanceof StaticFieldRef) {
-                        StaticFieldRef lhs = (StaticFieldRef) ds.getLeftOp();
-                        String className = lhs.getField().getDeclaringClass().getName();
-                        String fieldName = lhs.getField().getName();
-                        anderson.addNewConstraint(MemoryManager.putStaticAllocId(className, fieldName), lhs);
-                        if (ds.getRightOp() instanceof Local) {
-                            anderson.addAssignToHeapConstraint(ds.getRightOp(), lhs, lhs.getField().getName());
-                        } else if (ds.getRightOp() instanceof Constant) {
-                            // Nothing need to be done here
-                        } else {
-                            LOG.error("Unknown StaticFieldRef base type: {}", ds.getRightOp().getClass());
-                        }
-                    } else {
-                        LOG.error("Unknown DefinitionStmt.getLeftOP() base type: {}", ds.getLeftOp().getClass());
-                    }
-                }
-            }
-            anderson.run();
+            DirectedGraph<Unit> graph = new ExceptionalUnitGraph(sm.retrieveActiveBody());
+            AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
+            andersonFlowAnalysis.run();
         }
     }
 
@@ -121,8 +45,6 @@ public class WholeProgramTransformer extends SceneTransformer {
 
         SootMethod m = Scene.v().getMainClass().getMethodByName("main");
 
-        // Build local DFG with exceptions
-        DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
         // ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
@@ -160,23 +82,13 @@ public class WholeProgramTransformer extends SceneTransformer {
 
         analyzePointer(methodsToAnalyze);
 
-        LOG.info("Queries: {}", queries);
+        LOG.info("Queries: {}", QueryManager.queries);
         StringBuilder answer = new StringBuilder();
-        for (Entry<Integer, List<Local>> q : queries.entrySet()) {
-            LOG.info("Query: id={}, locals={}", q.getKey(), q.getValue());
-            TreeSet<Integer> result = new TreeSet<>();
-            for (Local local : q.getValue()) {
-                for (Anderson anderson : andersonInstances) {
-                    LOG.info("    local {}={}", local, anderson.getPointsToSet(local));
-                    if (anderson.getPointsToSet(local) != null) {
-                        result.addAll(anderson.getPointsToSet(local));
-                    }
-                }
-            }
+        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.result.entrySet()) {
             answer.append(q.getKey().toString()).append(":");
-            if (result.size() > 0) {
+            if (q.getValue().size() > 0) {
                 // boolean hasImplicitAllocId = false;
-                for (Integer i : result) {
+                for (Integer i : q.getValue()) {
                     if (i <= 0) {
                         // hasImplicitAllocId = true;
                         // answer.append(" ").append(0);

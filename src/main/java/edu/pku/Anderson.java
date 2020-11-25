@@ -87,14 +87,13 @@ public class Anderson {
         }
     }
 
-    private static final Map<Integer, Map<String, TreeSet<Integer>>> id2f2s = new HashMap<>(); // (allocId -> field -> pointSet)
-
+    private int currAllocId = 0;
+    private final Map<Integer, Map<String, TreeSet<Integer>>> id2f2s = new HashMap<>(); // (allocId -> field -> pointSet)
     private final List<AssignConstraint> assignConstraints = new ArrayList<>();
     private final List<AssignFromHeapConstraint> assignFromHeapConstraints = new ArrayList<>();
     private final List<AssignToHeapConstraint> assignToHeapConstraints = new ArrayList<>();
     private final List<NewConstraint> newConstraints = new ArrayList<>();
     private final Map<Value, TreeSet<Integer>> pts = new HashMap<>();
-
 
     public void addAssignConstraint(Value from, Value to) {
         assignConstraints.add(new AssignConstraint(from, to));
@@ -160,5 +159,53 @@ public class Anderson {
 
     public TreeSet<Integer> getPointsToSet(Value value) {
         return pts.get(value);
+    }
+
+    public int getCurrAllocId() {
+        return currAllocId;
+    }
+
+    public void setCurrAllocId(int currAllocId) {
+        this.currAllocId = currAllocId;
+    }
+
+    public void clear() {
+        id2f2s.clear();
+        pts.clear();
+        newConstraints.clear();
+        assignConstraints.clear();
+        assignToHeapConstraints.clear();
+        assignFromHeapConstraints.clear();
+    }
+
+    public void addAllFrom(Anderson another) {
+        currAllocId = another.currAllocId;
+        id2f2s.putAll(another.id2f2s);
+        for (Integer id : another.id2f2s.keySet()) {
+            if (id2f2s.containsKey(id)) {
+                Map<String, TreeSet<Integer>> map = id2f2s.get(id);
+                Map<String, TreeSet<Integer>> anotherMap = another.id2f2s.get(id);
+                for (String key : anotherMap.keySet()) {
+                    if (map.containsKey(key)) {
+                        map.get(key).addAll(anotherMap.get(key));
+                    } else {
+                        map.put(key, new TreeSet<>(anotherMap.get(key)));
+                    }
+                }
+            } else {
+                id2f2s.put(id, new HashMap<>(another.id2f2s.get(id)));
+            }
+        }
+        for (Value key : another.pts.keySet()) {
+            if (pts.containsKey(key)) {
+                pts.get(key).addAll(another.pts.get(key));
+            } else {
+                pts.put(key, new TreeSet<>(another.pts.get(key)));
+            }
+        }
+        newConstraints.addAll(another.newConstraints);
+        assignConstraints.addAll(another.assignConstraints);
+        assignToHeapConstraints.addAll(another.assignToHeapConstraints);
+        assignFromHeapConstraints.addAll(another.assignFromHeapConstraints);
     }
 }
