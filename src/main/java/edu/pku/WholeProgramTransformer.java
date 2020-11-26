@@ -12,7 +12,6 @@ import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
-import soot.jimple.toolkits.invoke.SiteInliner;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.util.queue.QueueReader;
@@ -33,8 +32,8 @@ public class WholeProgramTransformer extends SceneTransformer {
                 for (Unit u : sm.getActiveBody().getUnits()) {
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        QueryManager.extractAlloc(ie);
-                        QueryManager.extractTest(ie);
+                        MemoryManager.extractAlloc(ie);
+                        MemoryManager.extractTest(ie);
                     }
                 }
             }
@@ -44,7 +43,7 @@ public class WholeProgramTransformer extends SceneTransformer {
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
         extractAllQueries();
-        LOG.info("Queries: {}", QueryManager.getQueryResults());
+        LOG.info("Queries: {}", MemoryManager.getResults());
 
         SootMethod m = Scene.v().getMainClass().getMethodByName("main");
 
@@ -78,9 +77,9 @@ public class WholeProgramTransformer extends SceneTransformer {
         AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
         andersonFlowAnalysis.run();
 
-        LOG.info("Queries: {}", QueryManager.getQueryResults());
+        LOG.info("Queries: {}", MemoryManager.getResults());
         StringBuilder answer = new StringBuilder();
-        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.getQueryResults().entrySet()) {
+        for (Entry<Integer, TreeSet<Integer>> q : MemoryManager.getResults().entrySet()) {
             answer.append(q.getKey().toString()).append(":");
             if (q.getValue().size() > 0) {
                 // boolean hasImplicitAllocId = false;
@@ -93,7 +92,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     answer.append(" ").append(i);
                 }
             } else {
-                for (Integer i : MemoryManager.getAllocIds()) {
+                for (Integer i : MemoryManager.getExplicitAllocIds()) {
                     answer.append(" ").append(i);
                 }
             }

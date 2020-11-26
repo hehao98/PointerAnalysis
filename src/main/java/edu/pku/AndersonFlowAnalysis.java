@@ -68,13 +68,11 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
         if (u instanceof InvokeStmt) {
             InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
             int currAllocId;
-            if ((currAllocId = QueryManager.extractTest(ie)) != 0) {
+            if ((currAllocId = MemoryManager.extractTest(ie)) != 0) {
                 Value v = ie.getArgs().get(1);
-                if (v instanceof Local) {
-                    LOG.info("    Query and Result {}: {}={}", currAllocId, v, out.getPointsToSet(v.toString()));
-                    QueryManager.addResultsToId(currAllocId, out.getPointsToSet(v.toString()));
-                }
-            } else if ((currAllocId = QueryManager.extractAlloc(ie)) != 0) {
+                LOG.info("    Query and Result {}: {}={}", currAllocId, v, out.getPointsToSet(v.toString()));
+                MemoryManager.addResultsToAllocId(currAllocId, out.getPointsToSet(v.toString()));
+            } else if ((currAllocId = MemoryManager.extractAlloc(ie)) != 0) {
                 out.setCurrAllocId(currAllocId);
                 MemoryManager.addExplicitAllocId(out.getCurrAllocId());
             } else {
@@ -89,7 +87,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 if (out.getCurrAllocId() != 0)
                     out.addNewConstraint(out.getCurrAllocId(), ((DefinitionStmt) u).getLeftOp().toString());
                 else
-                    out.addNewConstraint(MemoryManager.getNextAllocId(), ((DefinitionStmt) u).getLeftOp().toString());
+                    out.addNewConstraint(MemoryManager.getNextImplicitAllocId(), ((DefinitionStmt) u).getLeftOp().toString());
                 out.setCurrAllocId(0);
             } else if (ds.getRightOp() instanceof ParameterRef) {
                 ParameterRef pr = (ParameterRef) (ds.getRightOp());
