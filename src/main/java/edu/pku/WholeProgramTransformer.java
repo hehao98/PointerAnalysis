@@ -15,29 +15,45 @@ import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.jimple.toolkits.invoke.SiteInliner;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
+import soot.util.queue.QueueReader;
 
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
 
     private void extractAllQueries() {
+        ReachableMethods reachableMethods = Scene.v().getReachableMethods();
+        QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
 
-    }
-
-    private void analyzePointer(List<SootMethod> methodsToAnalyze) {
-        for (SootMethod sm : methodsToAnalyze) {
-            LOG.info("Analyzing method {}", sm.toString());
-            DirectedGraph<Unit> graph = new ExceptionalUnitGraph(sm.retrieveActiveBody());
-            AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
-            andersonFlowAnalysis.run();
+        while (qr.hasNext()) {
+            SootMethod sm = qr.next().method();
+            if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
+                continue;
+            if (sm.hasActiveBody()) {
+                for (Unit u : sm.getActiveBody().getUnits()) {
+                    if (u instanceof InvokeStmt) {
+                        InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
+                        if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
+                            int id = ((IntConstant) ie.getArgs().get(0)).value;
+                            QueryManager.addResults(id, new TreeSet<>());
+                        } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                            MemoryManager.addExplicitAllocId(((IntConstant) ie.getArgs().get(0)).value);
+                        }
+                    }
+                }
+            }
         }
     }
 
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
+        extractAllQueries();
+        LOG.info("Queries: {}", QueryManager.getResult());
+
         SootMethod m = Scene.v().getMainClass().getMethodByName("main");
+
         /*
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 5; ++i) {
             Map<Stmt, SootMethod> methodsToInline = new HashMap<>();
             for (Unit u : m.getActiveBody().getUnits()) {
                 if (u instanceof InvokeStmt) {
@@ -60,14 +76,15 @@ public class WholeProgramTransformer extends SceneTransformer {
             for (Entry<Stmt, SootMethod> entry : methodsToInline.entrySet()) {
                 SiteInliner.inlineSite(entry.getValue(), entry.getKey(), m);
             }
-        }*/
+        } */
 
         DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
         AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
         andersonFlowAnalysis.run();
 
+        LOG.info("Queries: {}", QueryManager.getResult());
         StringBuilder answer = new StringBuilder();
-        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.result.entrySet()) {
+        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.getResult().entrySet()) {
             answer.append(q.getKey().toString()).append(":");
             if (q.getValue().size() > 0) {
                 // boolean hasImplicitAllocId = false;

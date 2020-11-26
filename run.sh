@@ -8,8 +8,10 @@ mvn clean package
 cp target/PointerAnalysis-1.0-SNAPSHOT.jar analyzer.jar
 
 res="---------- Evaluation Result Summary ----------"
-classes=( "Hello" "Hello2" "FieldSensitivity2" "FlowSensitivity1" "FlowSensitivity2" "Recursion"
-           "ContextSensitivity1" "Function" "Function2" "StaticFieldRef" "ImplicitAllocId"
+classes=( # Basic Tests
+          "Hello" "Hello2" "FieldSensitivity2" "FlowSensitivity1" "FlowSensitivity2" "Recursion"
+          "ContextSensitivity1" "Function" "Function2" "StaticFieldRef" "ImplicitAllocId" "Inheritance"
+          # Advanced Tests
           "FieldSensitivity" "PointerInHeap" "RecursionComplex" "SuperTest")
 if [ "$#" -ge 1 ]
 then
