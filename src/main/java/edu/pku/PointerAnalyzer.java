@@ -11,6 +11,8 @@ public class PointerAnalyzer {
 
 	private static final Logger LOG = LoggerFactory.getLogger(PointerAnalyzer.class);
 
+	public static String mainClass;
+
 	private static void printUsageAndExit() {
 		LOG.error("Usage: java -jar analyzer.jar <inputPath> <org.package.mainClass>");
 		System.exit(-1);
@@ -23,7 +25,7 @@ public class PointerAnalyzer {
 		String classpath = args[0] 
 				+ File.pathSeparator + args[0] + File.separator + "rt.jar"
 				+ File.pathSeparator + args[0] + File.separator + "jce.jar";
-
+		mainClass = args[1];
 		LOG.info("classPaths={}, mainClass={}", classpath, args[1]);
 
 		PackManager.v().getPack("wjtp")  // Add

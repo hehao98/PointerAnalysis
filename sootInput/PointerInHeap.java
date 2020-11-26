@@ -1,32 +1,32 @@
 package test;
 
 import benchmark.internal.BenchmarkN;
-import benchmark.objects.A;
+import benchmark.objects.B;
 
 public class PointerInHeap {
 
-    public static A x;
-    public static A y;
+    public static B x;
+    public static B y;
 
     public static void f1() {
         BenchmarkN.alloc(3);
-        A c = new A();
+        B c = new B();
         x = c;
         BenchmarkN.test(5, x);
     }
 
     public static void f2() {
         BenchmarkN.alloc(4);
-        A c = new A();
+        B c = new B();
         x = c;
         BenchmarkN.test(6, x);
     }
 
     public static void main(String[] args) {
         BenchmarkN.alloc(1);
-        A a = new A();
+        B a = new B();
         BenchmarkN.alloc(2);
-        A b = new A();
+        B b = new B();
 
         x = a;
         y = b;
