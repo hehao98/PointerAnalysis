@@ -4,16 +4,15 @@ import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import soot.Value;
 
 public class Anderson {
 
     private static final Logger LOG = LoggerFactory.getLogger(Anderson.class);
 
     public static class AssignConstraint {
-        Value from, to;
+        String from, to;
 
-        AssignConstraint(Value from, Value to) {
+        AssignConstraint(String from, String to) {
             this.from = from;
             this.to = to;
         }
@@ -28,11 +27,11 @@ public class Anderson {
     }
 
     public static class AssignFromHeapConstraint {
-        Value from;
-        Value to;
+        String from;
+        String to;
         String field; // field name, "" if not a field reference
 
-        AssignFromHeapConstraint(Value from, Value to, String field) {
+        AssignFromHeapConstraint(String from, String to, String field) {
             this.from = from;
             this.to = to;
             this.field = field;
@@ -49,11 +48,11 @@ public class Anderson {
     }
 
     public static class AssignToHeapConstraint {
-        Value from;
-        Value to;
+        String from;
+        String to;
         String field; // field name, "" if not a field reference
 
-        AssignToHeapConstraint(Value from, Value to, String field) {
+        AssignToHeapConstraint(String from, String to, String field) {
             this.from = from;
             this.to = to;
             this.field = field;
@@ -70,10 +69,10 @@ public class Anderson {
     }
 
     public static class NewConstraint {
-        Value to;
+        String to;
         int allocId;
 
-        NewConstraint(int allocId, Value to) {
+        NewConstraint(int allocId, String to) {
             this.allocId = allocId;
             this.to = to;
         }
@@ -93,21 +92,21 @@ public class Anderson {
     private final List<AssignFromHeapConstraint> assignFromHeapConstraints = new ArrayList<>();
     private final List<AssignToHeapConstraint> assignToHeapConstraints = new ArrayList<>();
     private final List<NewConstraint> newConstraints = new ArrayList<>();
-    private final Map<Value, TreeSet<Integer>> pts = new HashMap<>();
+    private final Map<String, TreeSet<Integer>> pts = new HashMap<>();
 
-    public void addAssignConstraint(Value from, Value to) {
+    public void addAssignConstraint(String from, String to) {
         assignConstraints.add(new AssignConstraint(from, to));
     }
 
-    public void addAssignFromHeapConstraint(Value from, Value to, String field) {
+    public void addAssignFromHeapConstraint(String from, String to, String field) {
         assignFromHeapConstraints.add(new AssignFromHeapConstraint(from, to, field));
     }
 
-    public void addAssignToHeapConstraint(Value from, Value to, String field) {
+    public void addAssignToHeapConstraint(String from, String to, String field) {
         assignToHeapConstraints.add(new AssignToHeapConstraint(from, to, field));
     }
 
-    public void addNewConstraint(int alloc, Value to) {
+    public void addNewConstraint(int alloc, String to) {
         newConstraints.add(new NewConstraint(alloc, to));
     }
 
@@ -157,8 +156,14 @@ public class Anderson {
         LOG.info("Solved allocId2field2Set = {}", id2f2s);
     }
 
-    public TreeSet<Integer> getPointsToSet(Value value) {
-        return pts.get(value);
+    public TreeSet<Integer> getPointsToSet(String value) {
+        if (pts.containsKey(value))
+            return pts.get(value);
+        return new TreeSet<>();
+    }
+
+    public void addAllTo(String value, Collection<Integer> pointTos) {
+        pts.computeIfAbsent(value, k -> new TreeSet<>()).addAll(pointTos);
     }
 
     public int getCurrAllocId() {
@@ -180,7 +185,21 @@ public class Anderson {
 
     public void addAllFrom(Anderson another) {
         currAllocId = another.currAllocId;
-        id2f2s.putAll(another.id2f2s);
+        addHeapFrom(another);
+        for (String key : another.pts.keySet()) {
+            if (pts.containsKey(key)) {
+                pts.get(key).addAll(another.pts.get(key));
+            } else {
+                pts.put(key, new TreeSet<>(another.pts.get(key)));
+            }
+        }
+        newConstraints.addAll(another.newConstraints);
+        assignConstraints.addAll(another.assignConstraints);
+        assignToHeapConstraints.addAll(another.assignToHeapConstraints);
+        assignFromHeapConstraints.addAll(another.assignFromHeapConstraints);
+    }
+
+    public void addHeapFrom(Anderson another) {
         for (Integer id : another.id2f2s.keySet()) {
             if (id2f2s.containsKey(id)) {
                 Map<String, TreeSet<Integer>> map = id2f2s.get(id);
@@ -196,16 +215,5 @@ public class Anderson {
                 id2f2s.put(id, new HashMap<>(another.id2f2s.get(id)));
             }
         }
-        for (Value key : another.pts.keySet()) {
-            if (pts.containsKey(key)) {
-                pts.get(key).addAll(another.pts.get(key));
-            } else {
-                pts.put(key, new TreeSet<>(another.pts.get(key)));
-            }
-        }
-        newConstraints.addAll(another.newConstraints);
-        assignConstraints.addAll(another.assignConstraints);
-        assignToHeapConstraints.addAll(another.assignToHeapConstraints);
-        assignFromHeapConstraints.addAll(another.assignFromHeapConstraints);
     }
 }

@@ -15,12 +15,14 @@ import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.jimple.toolkits.invoke.SiteInliner;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
-import soot.util.queue.QueueReader;
 
 public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
 
+    private void extractAllQueries() {
+
+    }
 
     private void analyzePointer(List<SootMethod> methodsToAnalyze) {
         for (SootMethod sm : methodsToAnalyze) {
@@ -33,56 +35,37 @@ public class WholeProgramTransformer extends SceneTransformer {
 
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
-
-        // Find the entry point with which the real program begins (exclude JDK built-in entry points)
-        List<SootMethod> entryPoints = new ArrayList<>();
-        for (SootMethod sm : Scene.v().getEntryPoints()) {
-            if (!sm.getDeclaringClass().isJavaLibraryClass()) {
-                entryPoints.add(sm);
-            }
-        }
-        LOG.info("Entry points for this program: {}", entryPoints);
-
         SootMethod m = Scene.v().getMainClass().getMethodByName("main");
-
-        // ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), entryPoints);
-        ReachableMethods reachableMethods = Scene.v().getReachableMethods();
-        QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
-
-        // We implement first-order context sensitivity through method inlining
-        List<SootMethod> methodsToAnalyze = new ArrayList<>();
-        while (qr.hasNext()) {
-            SootMethod sm = qr.next().method();
-            if (sm.getDeclaringClass().isJavaLibraryClass()) // Skip internal methods
-                continue;
-            if (sm.hasActiveBody()) {
-                Map<Stmt, SootMethod> methodsToInline = new HashMap<>();
-                for (Unit u : sm.getActiveBody().getUnits()) {
-                    if (u instanceof InvokeStmt) {
-                        InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        if (!ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")
-                                && !ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                            methodsToInline.put((InvokeStmt) u, ie.getMethod());
-                        }
-                    }
-                    if (u instanceof DefinitionStmt) {
-                        if (((DefinitionStmt) u).getRightOp() instanceof InvokeExpr) {
-                            InvokeExpr ie = (InvokeExpr) ((DefinitionStmt) u).getRightOp();
-                            methodsToInline.put((DefinitionStmt) u, ie.getMethod());
-                        }
+        /*
+        for (int i = 0; i < 3; ++i) {
+            Map<Stmt, SootMethod> methodsToInline = new HashMap<>();
+            for (Unit u : m.getActiveBody().getUnits()) {
+                if (u instanceof InvokeStmt) {
+                    InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
+                    if (ie.getMethod().isJavaLibraryMethod()) continue;
+                    if (!ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")
+                            && !ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
+                        methodsToInline.put((InvokeStmt) u, ie.getMethod());
                     }
                 }
-                // Perform inlining before the method is passed for analysis
-                for (Entry<Stmt, SootMethod> entry : methodsToInline.entrySet()) {
-                    SiteInliner.inlineSite(entry.getValue(), entry.getKey(), sm);
+                if (u instanceof DefinitionStmt) {
+                    if (((DefinitionStmt) u).getRightOp() instanceof InvokeExpr) {
+                        InvokeExpr ie = (InvokeExpr) ((DefinitionStmt) u).getRightOp();
+                        if (ie.getMethod().isJavaLibraryMethod()) continue;
+                        methodsToInline.put((DefinitionStmt) u, ie.getMethod());
+                    }
                 }
-                methodsToAnalyze.add(sm);
             }
-        }
+            // Perform inlining before the method is passed for analysis
+            for (Entry<Stmt, SootMethod> entry : methodsToInline.entrySet()) {
+                SiteInliner.inlineSite(entry.getValue(), entry.getKey(), m);
+            }
+        }*/
 
-        analyzePointer(methodsToAnalyze);
+        DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
+        AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
+        andersonFlowAnalysis.run();
 
-        LOG.info("Queries: {}", QueryManager.queries);
         StringBuilder answer = new StringBuilder();
         for (Entry<Integer, TreeSet<Integer>> q : QueryManager.result.entrySet()) {
             answer.append(q.getKey().toString()).append(":");
