@@ -67,15 +67,15 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
 
         if (u instanceof InvokeStmt) {
             InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-            if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
+            int currAllocId;
+            if ((currAllocId = QueryManager.extractTest(ie)) != 0) {
                 Value v = ie.getArgs().get(1);
-                int id = ((IntConstant) ie.getArgs().get(0)).value;
                 if (v instanceof Local) {
-                    LOG.info("    Query and Result {}: {}={}", id, v, out.getPointsToSet(v.toString()));
-                    QueryManager.addResults(id, out.getPointsToSet(v.toString()));
+                    LOG.info("    Query and Result {}: {}={}", currAllocId, v, out.getPointsToSet(v.toString()));
+                    QueryManager.addResultsToId(currAllocId, out.getPointsToSet(v.toString()));
                 }
-            } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                out.setCurrAllocId(((IntConstant) ie.getArgs().get(0)).value);
+            } else if ((currAllocId = QueryManager.extractAlloc(ie)) != 0) {
+                out.setCurrAllocId(currAllocId);
                 MemoryManager.addExplicitAllocId(out.getCurrAllocId());
             } else {
                 handleMethodInvocation(ie.getMethod(), out, ie, null);

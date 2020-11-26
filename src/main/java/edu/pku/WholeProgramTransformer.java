@@ -33,12 +33,8 @@ public class WholeProgramTransformer extends SceneTransformer {
                 for (Unit u : sm.getActiveBody().getUnits()) {
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>")) {
-                            int id = ((IntConstant) ie.getArgs().get(0)).value;
-                            QueryManager.addResults(id, new TreeSet<>());
-                        } else if (ie.getMethod().toString().equals("<benchmark.internal.BenchmarkN: void alloc(int)>")) {
-                            MemoryManager.addExplicitAllocId(((IntConstant) ie.getArgs().get(0)).value);
-                        }
+                        QueryManager.extractAlloc(ie);
+                        QueryManager.extractTest(ie);
                     }
                 }
             }
@@ -48,12 +44,12 @@ public class WholeProgramTransformer extends SceneTransformer {
     @Override
     protected void internalTransform(String arg0, Map<String, String> arg1) {
         extractAllQueries();
-        LOG.info("Queries: {}", QueryManager.getResult());
+        LOG.info("Queries: {}", QueryManager.getQueryResults());
 
         SootMethod m = Scene.v().getMainClass().getMethodByName("main");
 
         /*
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 10; ++i) {
             Map<Stmt, SootMethod> methodsToInline = new HashMap<>();
             for (Unit u : m.getActiveBody().getUnits()) {
                 if (u instanceof InvokeStmt) {
@@ -82,9 +78,9 @@ public class WholeProgramTransformer extends SceneTransformer {
         AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
         andersonFlowAnalysis.run();
 
-        LOG.info("Queries: {}", QueryManager.getResult());
+        LOG.info("Queries: {}", QueryManager.getQueryResults());
         StringBuilder answer = new StringBuilder();
-        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.getResult().entrySet()) {
+        for (Entry<Integer, TreeSet<Integer>> q : QueryManager.getQueryResults().entrySet()) {
             answer.append(q.getKey().toString()).append(":");
             if (q.getValue().size() > 0) {
                 // boolean hasImplicitAllocId = false;
