@@ -21,6 +21,8 @@ public class WholeProgramTransformer extends SceneTransformer {
 
     private static final Logger LOG = LoggerFactory.getLogger(WholeProgramTransformer.class);
 
+    private static final TreeSet<Integer> allocIds = new TreeSet<>();
+
     private void extractAllQueries() {
         ReachableMethods reachableMethods = Scene.v().getReachableMethods();
         QueueReader<MethodOrMethodContext> qr = reachableMethods.listener();
@@ -33,8 +35,12 @@ public class WholeProgramTransformer extends SceneTransformer {
                 for (Unit u : sm.getActiveBody().getUnits()) {
                     if (u instanceof InvokeStmt) {
                         InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
-                        MemoryManager.extractAlloc(ie);
-                        MemoryManager.extractTest(ie);
+                        if (ie.getMethod().toString().equals(MemoryManager.TEST)) {
+                            int id = ((IntConstant) ie.getArgs().get(0)).value;
+                            MemoryManager.getResults().computeIfAbsent(id, k -> new TreeSet<>());
+                        } else if (ie.getMethod().toString().equals(MemoryManager.ALLOC)) {
+                            allocIds.add(((IntConstant) ie.getArgs().get(0)).value);
+                        }
                     }
                 }
             }
@@ -102,7 +108,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     answer.append(" ").append(i);
                 }
             } else {
-                for (Integer i : MemoryManager.getAllocIds()) {
+                for (Integer i : allocIds) {
                     if (i > 0) answer.append(" ").append(i);
                 }
             }

@@ -15,15 +15,18 @@ public class MemoryManager {
 
     private static class Item {
         final String type;
-        final TreeSet<Integer> points;
-        Item(String type, TreeSet<Integer> points) {
+        final Set<Integer> points;
+
+        Item(String type, Set<Integer> points) {
             this.type = type;
             this.points = points;
         }
+
         @Override
         public String toString() {
             return points.toString();
         }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -32,6 +35,7 @@ public class MemoryManager {
             return Objects.equals(type, item.type) &&
                     Objects.equals(points, item.points);
         }
+
         @Override
         public int hashCode() {
             return Objects.hash(type, points);
@@ -43,34 +47,8 @@ public class MemoryManager {
     public static final String THIS = "";
     private static final Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
     private static final TreeMap<Integer, TreeSet<Integer>> result = new TreeMap<>();
-    private static final Set<Integer> allocIds = new TreeSet<>();
-    private static final Map<Integer, Map<String, Item>> id2f2s = new HashMap<>(); // allocId -> field -> pointSet
-    private static final Map<Integer, String> id2type = new HashMap<>();           // allocId -> type
     private static final Map<String, Integer> static2Id = new HashMap<>();         // className.field -> allocId
     private static final Map<String, Integer> implicit2Id = new HashMap<>();       // className.method.unit -> allocId
-    private static int nextAllocId = -1;
-
-    public static int getMemHash() {
-        return Objects.hash(allocIds, id2f2s, static2Id, implicit2Id);
-    }
-
-    public static int extractTest(InvokeExpr ie) {
-        if (ie.getMethod().toString().equals(TEST)) {
-            int id = ((IntConstant) ie.getArgs().get(0)).value;
-            addResultsToAllocId(id, new TreeSet<>());
-            return id;
-        }
-        return 0;
-    }
-
-    public static int extractAlloc(InvokeExpr ie) {
-        if (ie.getMethod().toString().equals(ALLOC)) {
-            int currAllocId = ((IntConstant) ie.getArgs().get(0)).value;
-            addExplicitAllocId(currAllocId);
-            return currAllocId;
-        }
-        return 0;
-    }
 
     public static void addResultsToAllocId(int id, TreeSet<Integer> points) {
         if (points == null) return;
@@ -82,40 +60,113 @@ public class MemoryManager {
         return result;
     }
 
-    public static void addExplicitAllocId(int id) {
-        if (id <= 0) LOG.error("Illegal alloc id");
-        allocIds.add(id);
+    public static Map<String, Integer> getStaticAllocIds() {
+        return static2Id;
     }
 
-    public static Set<Integer> getAllocIds() {
-        return allocIds;
+    public static Map<String, Integer> getImplicitAllocIds() {
+        return implicit2Id;
     }
 
-    public static int getNextImplicitAllocId() {
-        int id = nextAllocId--;
-        allocIds.add(id);
-        return id;
+    public static MemoryManager merge(MemoryManager m1, MemoryManager m2) {
+        MemoryManager m = m1.getCopy();
+        m.nextAllocId = Math.min(m1.nextAllocId, m2.nextAllocId);
+        for (Integer allocId : m2.id2f2s.keySet()) {
+            Map<String, Item> map1 = m.id2f2s.computeIfAbsent(allocId, k -> new HashMap<>());
+            Map<String, Item> map2 = m2.id2f2s.get(allocId);
+            for (Map.Entry<String, Item> entry : map2.entrySet()) {
+                map1.putIfAbsent(
+                        entry.getKey(),
+                        new Item(entry.getValue().type, new TreeSet<>())
+                );
+                map1.get(entry.getKey()).points.addAll(entry.getValue().points);
+            }
+        }
+        return m;
     }
 
-    public static int initStaticAllocId(String className, String fieldName, SootClass fieldClass) {
+    private Map<Integer, Map<String, Item>> id2f2s = new HashMap<>(); // allocId -> field -> pointSet
+    private Map<Integer, String> id2type = new HashMap<>();           // allocId -> type
+    private int nextAllocId = -1;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MemoryManager that = (MemoryManager) o;
+        return nextAllocId == that.nextAllocId &&
+                Objects.equals(id2f2s, that.id2f2s) &&
+                Objects.equals(id2type, that.id2type);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id2f2s, id2type, static2Id, implicit2Id, nextAllocId);
+    }
+
+    public MemoryManager getCopy() {
+        MemoryManager copy = new MemoryManager();
+        copy.id2f2s = new HashMap<>();
+        for (Integer key : id2f2s.keySet()) {
+            Map<String, Item> map = id2f2s.get(key);
+            copy.id2f2s.put(key, new HashMap<>());
+            for (String key2 : map.keySet()) {
+                copy.id2f2s.get(key).put(key2, new Item(
+                        map.get(key2).type,
+                        new TreeSet<>(map.get(key2).points)
+                ));
+            }
+        }
+        copy.id2type = new HashMap<>(id2type);
+        copy.nextAllocId = nextAllocId;
+        return copy;
+    }
+
+    public int extractTest(InvokeExpr ie) {
+        if (ie.getMethod().toString().equals(TEST)) {
+            int id = ((IntConstant) ie.getArgs().get(0)).value;
+            addResultsToAllocId(id, new TreeSet<>());
+            return id;
+        }
+        return 0;
+    }
+
+    public int extractAlloc(InvokeExpr ie) {
+        if (ie.getMethod().toString().equals(ALLOC)) {
+            return ((IntConstant) ie.getArgs().get(0)).value;
+        }
+        return 0;
+    }
+
+    public int initStaticAllocId(String className, String fieldName, SootClass fieldClass) {
         String key = className + "." + fieldName;
-        if (static2Id.containsKey(key)) return static2Id.get(key);
-        int id = getNextImplicitAllocId();
+        int id;
+        if (static2Id.containsKey(key)) {
+            id = static2Id.get(key);
+            if (!id2f2s.containsKey(id)) initAllocId(id, fieldClass);
+            return id;
+        }
+        id = nextAllocId--;
         static2Id.put(key, id);
         initAllocId(id, fieldClass);
         return id;
     }
 
-    public static int initImplicitAllocId(SootMethod method, Unit u, SootClass allocClass) {
+    public int initImplicitAllocId(SootMethod method, Unit u, SootClass allocClass) {
         String key = method.getDeclaringClass().getName() + "." + method.getName() + "." + u.toString();
-        if (implicit2Id.containsKey(key)) return implicit2Id.get(key);
-        int id = getNextImplicitAllocId();
+        int id;
+        if (implicit2Id.containsKey(key)) {
+            id = implicit2Id.get(key);
+            if (!id2f2s.containsKey(id)) initAllocId(id, allocClass);
+            return id;
+        }
+        id = nextAllocId--;
         implicit2Id.put(key, id);
         initAllocId(id, allocClass);
         return id;
     }
 
-    public static void initAllocId(int id, SootClass c) {
+    public void initAllocId(int id, SootClass c) {
         id2type.put(id, c.getName());
         id2f2s.put(id, new HashMap<>());
         id2f2s.get(id).put(THIS, new Item(c.getName(), new TreeSet<>()));
@@ -124,43 +175,31 @@ public class MemoryManager {
         }
     }
 
-    public static TreeSet<Integer> getPointToSet(int id, String field) {
+    public Set<Integer> getPointToSet(int id, String field) {
         return id2f2s.get(id).get(field).points;
     }
 
-    public static TreeSet<Integer> getPointToSet(Collection<Integer> ids, String field) {
-        TreeSet<Integer> result = new TreeSet<>();
+    public Set<Integer> getPointToSet(Collection<Integer> ids, String field) {
+        TreeSet<Integer> r = new TreeSet<>();
         for (Integer id : ids) {
-            result.addAll(getPointToSet(id, field));
+            r.addAll(getPointToSet(id, field));
         }
-        return result;
+        return r;
     }
 
-    public static void updatePointToSet(int id, String field, Collection<Integer> points) {
-        //getPointToSet(id, field).clear();
+    public void replacePointToSet(int id, String field, Collection<Integer> points) {
+        getPointToSet(id, field).clear();
         getPointToSet(id, field).addAll(points);
     }
 
-    public static void updatePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
+    public void replacePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
         for (Integer id : ids) {
-            //getPointToSet(id, field).clear();
+            getPointToSet(id, field).clear();
             getPointToSet(id, field).addAll(points);
         }
     }
 
-    public static Map<Integer, Map<String, Item>> getMemAllocTable() {
+    public Map<Integer, Map<String, Item>> getMemAllocTable() {
         return id2f2s;
-    }
-
-    public static int getStaticAllocId(String className, String fieldName) {
-        return static2Id.get(className + "." + fieldName);
-    }
-
-    public static Map<String, Integer> getStaticAllocIds() {
-        return static2Id;
-    }
-
-    public static Map<String, Integer> getImplicitAllocIds() {
-        return implicit2Id;
     }
 }
