@@ -92,8 +92,8 @@ public class WholeProgramTransformer extends SceneTransformer {
                     answer.append(" ").append(i);
                 }
             } else {
-                for (Integer i : MemoryManager.getExplicitAllocIds()) {
-                    answer.append(" ").append(i);
+                for (Integer i : MemoryManager.getAllocIds()) {
+                    if (i > 0) answer.append(" ").append(i);
                 }
             }
             answer.append("\n");

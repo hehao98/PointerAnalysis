@@ -41,21 +41,24 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
     @Override
     protected Anderson newInitialFlow() {
         Anderson anderson = new Anderson();
-        if (initialAnderson != null) anderson.addAllFrom(initialAnderson);
+        if (initialAnderson != null) anderson.mergeAll(initialAnderson);
         return anderson;
     }
 
     @Override
     protected void copy(Anderson src, Anderson dest) {
         dest.clear();
-        dest.addAllFrom(src);
+        dest.setCurrAllocId(src.getCurrAllocId());
+        dest.mergeAll(src);
     }
 
     @Override
     protected void merge(Anderson in1, Anderson in2, Anderson out) {
         out.clear();
-        out.addAllFrom(in1);
-        out.addAllFrom(in2);
+        if (in1.getCurrAllocId() != 0) out.setCurrAllocId(in1.getCurrAllocId());
+        if (in2.getCurrAllocId() != 0) out.setCurrAllocId(in2.getCurrAllocId());
+        out.mergeAll(in1);
+        out.mergeAll(in2);
     }
 
     @Override
@@ -63,15 +66,16 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
         LOG.info("    {}", u);
 
         out.clear();
-        out.addAllFrom(in);
+        out.mergeAll(in);
+        out.setCurrAllocId(in.getCurrAllocId());
 
         if (u instanceof InvokeStmt) {
             InvokeExpr ie = ((InvokeStmt) u).getInvokeExpr();
             int currAllocId;
             if ((currAllocId = MemoryManager.extractTest(ie)) != 0) {
                 Value v = ie.getArgs().get(1);
-                LOG.info("    Query and Result {}: {}={}", currAllocId, v, out.getPointsToSet(v.toString()));
-                MemoryManager.addResultsToAllocId(currAllocId, out.getPointsToSet(v.toString()));
+                LOG.info("    Query and Result {}: {}={}", currAllocId, v, out.getPointToSet(v.toString()));
+                MemoryManager.addResultsToAllocId(currAllocId, out.getPointToSet(v.toString()));
             } else if ((currAllocId = MemoryManager.extractAlloc(ie)) != 0) {
                 out.setCurrAllocId(currAllocId);
                 MemoryManager.addExplicitAllocId(out.getCurrAllocId());
@@ -84,32 +88,32 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 InvokeExpr ie = (InvokeExpr) ((DefinitionStmt) u).getRightOp();
                 handleMethodInvocation(ie.getMethod(), out, ie, (Local) ds.getLeftOp());
             } else if (ds.getRightOp() instanceof NewExpr) {
-                if (out.getCurrAllocId() != 0)
-                    out.addNewConstraint(out.getCurrAllocId(), ((DefinitionStmt) u).getLeftOp().toString());
-                else
-                    out.addNewConstraint(MemoryManager.getNextImplicitAllocId(), ((DefinitionStmt) u).getLeftOp().toString());
+                String key = ds.getLeftOp().toString();
+                int id = out.getCurrAllocId() == 0 ? MemoryManager.getNextImplicitAllocId() : out.getCurrAllocId();
+                out.add(key, id);
+                MemoryManager.initAllocId(id, ((NewExpr) ds.getRightOp()).getBaseType().getSootClass());
                 out.setCurrAllocId(0);
             } else if (ds.getRightOp() instanceof ParameterRef) {
                 ParameterRef pr = (ParameterRef) (ds.getRightOp());
                 if (ds.getLeftOp() instanceof Local) {
-                    out.addAssignConstraint("arg" + pr.getIndex(), ds.getLeftOp().toString());
+                    out.replace("arg" + pr.getIndex(), ds.getLeftOp().toString());
                 } else {
                     LOG.error("Unknown ds.getLeftOP() type: {}", ds.getLeftOp().getClass());
                 }
             } else if (ds.getLeftOp() instanceof Local) {
                 if (ds.getRightOp() instanceof Local) {
-                    out.addAssignConstraint(ds.getRightOp().toString(), ds.getLeftOp().toString());
+                    out.replace(ds.getRightOp().toString(), ds.getLeftOp().toString());
                 } else if (ds.getRightOp() instanceof InstanceFieldRef) {
                     InstanceFieldRef ifr = (InstanceFieldRef) ds.getRightOp();
                     if (ifr.getBase() instanceof Local) {
+                        out.replace(ifr.getBase().toString(), MemoryManager.getPointToSet())
                         out.addAssignFromHeapConstraint(ifr.getBase().toString(), ds.getLeftOp().toString(), ifr.getField().getName());
                     } else {
                         LOG.error("Unknown InstanceFieldRef base type: {}", ifr.getBase().getClass());
                     }
                 } else if (ds.getRightOp() instanceof ThisRef) {
                     ThisRef rhs = (ThisRef)(ds.getRightOp());
-                    out.addAssignConstraint("this", rhs.toString());
-                    out.addAssignConstraint(rhs.toString(), ds.getLeftOp().toString());
+                    out.replace("this", ds.getLeftOp().toString());
                     //out.addAssignFromHeapConstraint(rhs.toString(), ds.getLeftOp().toString(), "");
                 } else if (ds.getRightOp() instanceof StaticFieldRef) {
                     StaticFieldRef rhs = (StaticFieldRef) (ds.getRightOp());
