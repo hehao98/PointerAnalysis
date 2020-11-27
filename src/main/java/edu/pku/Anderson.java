@@ -7,6 +7,19 @@ public class Anderson {
     private int currAllocId = 0;
     private final Map<String, TreeSet<Integer>> pts = new HashMap<>();
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Anderson anderson = (Anderson) o;
+        return Objects.equals(pts, anderson.pts);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(pts);
+    }
+
     public void add(String key, Integer point) {
         pts.computeIfAbsent(key, k -> new TreeSet<>()).add(point);
     }

@@ -24,4 +24,4 @@ for k in gt.keys():
 if unsound:
     print("Unsound")
 else:
-    print("Precision={:.4f}".format(sum(sum(gt.values(), [])) / sum(sum(res.values(), []))))
+    print("Precision={:.4f}".format(len(sum(gt.values(), [])) / len(sum(res.values(), []))))

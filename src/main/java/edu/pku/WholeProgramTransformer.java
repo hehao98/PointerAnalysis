@@ -76,7 +76,7 @@ public class WholeProgramTransformer extends SceneTransformer {
 
         try {
             DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
-            AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
+            AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph, m);
             andersonFlowAnalysis.run();
         } catch (Exception e) {
             LOG.error(e.getMessage());

@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import soot.SootClass;
 import soot.SootField;
+import soot.SootMethod;
+import soot.Unit;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
 
@@ -32,6 +34,7 @@ public class MemoryManager {
     private static final Map<Integer, Map<String, Item>> id2f2s = new HashMap<>(); // allocId -> field -> pointSet
     private static final Map<Integer, String> id2type = new HashMap<>();           // allocId -> type
     private static final Map<String, Integer> static2Id = new HashMap<>();         // className.field -> allocId
+    private static final Map<String, Integer> implicit2Id = new HashMap<>();       // className.method.unit -> allocId
     private static int nextAllocId = -1;
 
     public static int extractTest(InvokeExpr ie) {
@@ -86,6 +89,15 @@ public class MemoryManager {
         return id;
     }
 
+    public static int initImplicitAllocId(SootMethod method, Unit u, SootClass allocClass) {
+        String key = method.getDeclaringClass().getName() + "." + method.getName() + "." + u.toString();
+        if (implicit2Id.containsKey(key)) return implicit2Id.get(key);
+        int id = getNextImplicitAllocId();
+        implicit2Id.put(key, id);
+        initAllocId(id, allocClass);
+        return id;
+    }
+
     public static void initAllocId(int id, SootClass c) {
         id2type.put(id, c.getName());
         id2f2s.put(id, new HashMap<>());
@@ -129,5 +141,9 @@ public class MemoryManager {
 
     public static Map<String, Integer> getStaticAllocIds() {
         return static2Id;
+    }
+
+    public static Map<String, Integer> getImplicitAllocIds() {
+        return implicit2Id;
     }
 }

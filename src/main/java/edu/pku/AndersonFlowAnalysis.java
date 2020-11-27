@@ -2,10 +2,7 @@ package edu.pku;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import soot.Local;
-import soot.SootMethod;
-import soot.Unit;
-import soot.Value;
+import soot.*;
 import soot.jimple.*;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
@@ -23,8 +20,9 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
     private final Anderson finalAnderson = new Anderson();
     private final List<SootMethod> callStack = new ArrayList<>();
 
-    public AndersonFlowAnalysis(DirectedGraph<Unit> graph) {
+    public AndersonFlowAnalysis(DirectedGraph<Unit> graph, SootMethod thisMethod) {
         super(graph);
+        this.callStack.add(thisMethod);
     }
 
     public AndersonFlowAnalysis(DirectedGraph<Unit> graph, Anderson initialAnderson,
@@ -94,9 +92,14 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 handleMethodInvocation(ie.getMethod(), out, ie, (Local) ds.getLeftOp());
             } else if (ds.getRightOp() instanceof NewExpr) {
                 String key = ds.getLeftOp().toString();
-                int id = out.getCurrAllocId() == 0 ? MemoryManager.getNextImplicitAllocId() : out.getCurrAllocId();
-                out.add(key, id);
-                MemoryManager.initAllocId(id, ((NewExpr) ds.getRightOp()).getBaseType().getSootClass());
+                SootClass allocClass = ((NewExpr) ds.getRightOp()).getBaseType().getSootClass();
+                if (out.getCurrAllocId() > 0) {
+                    MemoryManager.initAllocId(out.getCurrAllocId(), allocClass);
+                    out.add(key, out.getCurrAllocId());
+                } else {
+                    int id = MemoryManager.initImplicitAllocId(callStack.get(callStack.size() - 1), u, allocClass);
+                    out.add(key, id);
+                }
                 out.setCurrAllocId(0);
             } else if (ds.getRightOp() instanceof ParameterRef) {
                 ParameterRef pr = (ParameterRef) (ds.getRightOp());
@@ -159,7 +162,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                             lhs.getField().getName(),
                             out.getPointToSet(ds.getRightOp().toString())
                     );
-                } else if (!(ds.getRightOp() instanceof Constant)){
+                } else if (!(ds.getRightOp() instanceof Constant)) {
                     LOG.error("Unknown StaticFieldRef base type: {}", ds.getRightOp().getClass());
                 }
             } else {
@@ -177,6 +180,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
         LOG.info("    State After: {}", out.getPointToSet());
         LOG.info("    Heap Table: {}", MemoryManager.getMemAllocTable());
         LOG.info("    Static Alloc Table: {}", MemoryManager.getStaticAllocIds());
+        LOG.info("    Implicit Alloc Table: {}", MemoryManager.getImplicitAllocIds());
     }
 
     private void handleMethodInvocation(SootMethod method, Anderson out, InvokeExpr ie, Local ret) {
