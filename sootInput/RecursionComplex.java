@@ -6,14 +6,14 @@ import benchmark.objects.B;
 
 public class RecursionComplex {
 
-    public static void testme(B k) {
+    public static void bar(B k) {
         BenchmarkN.alloc(7);
         A d = new A(k);
-        specialchange(d);
+        foo(d);
         BenchmarkN.test(8, d);
     }
 
-    public static void specialchange(A k) {
+    public static void foo(A k) {
         BenchmarkN.alloc(4);
         A d = new A();
         BenchmarkN.alloc(5);
@@ -21,7 +21,7 @@ public class RecursionComplex {
         BenchmarkN.alloc(6);
         B b = new B();
         k.f = b;
-        testme(b);
+        bar(b);
         BenchmarkN.test(5, d);
         BenchmarkN.test(6, s.f);
     }
@@ -37,7 +37,7 @@ public class RecursionComplex {
         if (args.length > 1) a = b;
         if (args.length > 2) b = c;
         BenchmarkN.test(2, a);
-        specialchange(c);
+        foo(c);
         BenchmarkN.test(3, c);
         BenchmarkN.test(4, b);
         BenchmarkN.test(7, c.f);

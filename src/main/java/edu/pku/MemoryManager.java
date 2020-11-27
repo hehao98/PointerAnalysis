@@ -1,7 +1,5 @@
 package edu.pku;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import soot.SootClass;
 import soot.SootField;
 import soot.SootMethod;
@@ -45,7 +43,6 @@ public class MemoryManager {
     public static final String ALLOC = "<benchmark.internal.BenchmarkN: void alloc(int)>";
     public static final String TEST = "<benchmark.internal.BenchmarkN: void test(int,java.lang.Object)>";
     public static final String THIS = "";
-    private static final Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
     private static final TreeMap<Integer, TreeSet<Integer>> result = new TreeMap<>();
     private static final Map<String, Integer> static2Id = new HashMap<>();         // className.field -> allocId
     private static final Map<String, Integer> implicit2Id = new HashMap<>();       // className.method.unit -> allocId
@@ -173,6 +170,13 @@ public class MemoryManager {
         for (SootField field : c.getFields()) {
             id2f2s.get(id).put(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
         }
+        while (c.hasSuperclass()) {
+            c = c.getSuperclass();
+            if (c.isJavaLibraryClass()) break;
+            for (SootField field : c.getFields()) {
+                id2f2s.get(id).put(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
+            }
+        }
     }
 
     public Set<Integer> getPointToSet(int id, String field) {
@@ -187,15 +191,18 @@ public class MemoryManager {
         return r;
     }
 
-    public void replacePointToSet(int id, String field, Collection<Integer> points) {
-        getPointToSet(id, field).clear();
+    public void updatePointToSet(int id, String field, Collection<Integer> points) {
+        //getPointToSet(id, field).clear();
         getPointToSet(id, field).addAll(points);
     }
 
-    public void replacePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
-        for (Integer id : ids) {
-            getPointToSet(id, field).clear();
-            getPointToSet(id, field).addAll(points);
+    public void updatePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
+        if (ids.size() == 1) { // Strong Update
+            updatePointToSet(ids.iterator().next(), field, points);
+        } else { // Weak Update
+            for (Integer id : ids) {
+                getPointToSet(id, field).addAll(points);
+            }
         }
     }
 

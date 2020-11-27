@@ -141,7 +141,13 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
                 if (lhs.getBase() instanceof Local) {
                     if (ds.getRightOp() instanceof Local) { // a.f = b
-                        out.getMemory().replacePointToSet(
+                        LOG.info("{} ", out.getMemory().getMemAllocTable());
+                        LOG.info( "{} {} {}",
+                                out.getPointToSet(lhs.getBase().toString()),
+                                lhs.getField().getName(),
+                                out.getPointToSet(ds.getRightOp().toString())
+                        );
+                        out.getMemory().updatePointToSet(
                                 out.getPointToSet(lhs.getBase().toString()),
                                 lhs.getField().getName(),
                                 out.getPointToSet(ds.getRightOp().toString())
@@ -161,7 +167,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 );
                 LOG.info("{}", id);
                 if (ds.getRightOp() instanceof Local) {
-                    out.getMemory().replacePointToSet(
+                    out.getMemory().updatePointToSet(
                             id,
                             lhs.getField().getName(),
                             out.getPointToSet(ds.getRightOp().toString())
@@ -193,11 +199,12 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
         if (method.isJavaLibraryMethod()) {
             return;
         }
-        // If the method is already called in call stack, skip it to avoid infinite loop
+        int duplicateMethodCount = 0;
         for (SootMethod prev : callStack) {
             if (prev.toString().equals(method.toString()))
-                return;
+                duplicateMethodCount++;
         }
+        if (duplicateMethodCount > 3) return;
 
         DirectedGraph<Unit> thisGraph = new ExceptionalUnitGraph(method.retrieveActiveBody());
         Anderson initialState = new Anderson();
