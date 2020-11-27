@@ -1,6 +1,7 @@
 package edu.pku;
 
 import java.io.File;
+import java.util.Date;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,9 +14,15 @@ public class PointerAnalyzer {
 
 	public static String mainClass;
 
+	private static Date startTime;
+
 	private static void printUsageAndExit() {
 		LOG.error("Usage: java -jar analyzer.jar <inputPath> <org.package.mainClass>");
 		System.exit(-1);
+	}
+
+	public static boolean exceedsTimeLimit() {
+		return (new Date().getTime() - startTime.getTime()) / 1000 > 180;
 	}
 
 	public static void main(String[] args) {
@@ -25,7 +32,9 @@ public class PointerAnalyzer {
 		String classpath = args[0] 
 				+ File.pathSeparator + args[0] + File.separator + "rt.jar"
 				+ File.pathSeparator + args[0] + File.separator + "jce.jar";
+
 		mainClass = args[1];
+		startTime = new Date();
 		LOG.info("classPaths={}, mainClass={}", classpath, args[1]);
 
 		PackManager.v().getPack("wjtp")  // Add

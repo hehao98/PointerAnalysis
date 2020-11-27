@@ -1,17 +1,17 @@
 package test;
 
 import benchmark.internal.BenchmarkN;
-import benchmark.objects.A;
+import benchmark.objects.B;
 
 public class FlowSensitivity2 {
 
-    public static A x;
+    public static B x;
 
     public static void main(String[] args) {
         BenchmarkN.alloc(1);
-        A a = new A();
+        B a = new B();
         BenchmarkN.alloc(2);
-        A b = new A();
+        B b = new B();
 
         x = a;
         BenchmarkN.test(1, x);

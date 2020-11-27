@@ -12,6 +12,7 @@ import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
+import soot.jimple.toolkits.invoke.SiteInliner;
 import soot.toolkits.graph.DirectedGraph;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.util.queue.QueueReader;
@@ -71,22 +72,31 @@ public class WholeProgramTransformer extends SceneTransformer {
             for (Entry<Stmt, SootMethod> entry : methodsToInline.entrySet()) {
                 SiteInliner.inlineSite(entry.getValue(), entry.getKey(), m);
             }
-        } */
+        }*/
 
-        DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
-        AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
-        andersonFlowAnalysis.run();
+        try {
+            DirectedGraph<Unit> graph = new ExceptionalUnitGraph(m.retrieveActiveBody());
+            AndersonFlowAnalysis andersonFlowAnalysis = new AndersonFlowAnalysis(graph);
+            andersonFlowAnalysis.run();
+        } catch (Exception e) {
+            LOG.error(e.getMessage());
+            for (StackTraceElement s : e.getStackTrace())
+                LOG.error("    {}", s);
+            for (int key : MemoryManager.getResults().keySet()) {
+                MemoryManager.getResults().get(key).clear();
+            }
+        }
 
         LOG.info("Queries: {}", MemoryManager.getResults());
         StringBuilder answer = new StringBuilder();
         for (Entry<Integer, TreeSet<Integer>> q : MemoryManager.getResults().entrySet()) {
             answer.append(q.getKey().toString()).append(":");
             if (q.getValue().size() > 0) {
-                // boolean hasImplicitAllocId = false;
+                boolean hasImplicitAllocId = false;
                 for (Integer i : q.getValue()) {
-                    if (i <= 0) {
-                        // hasImplicitAllocId = true;
-                        // answer.append(" ").append(0);
+                    if (i <= 0 && !hasImplicitAllocId) {
+                        hasImplicitAllocId = true;
+                        answer.append(" ").append(0);
                         continue;
                     }
                     answer.append(" ").append(i);

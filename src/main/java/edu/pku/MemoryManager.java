@@ -18,6 +18,9 @@ public class MemoryManager {
             this.type = type;
             this.points = points;
         }
+        @Override public String toString() {
+            return points.toString();
+        }
     }
 
     public static final String ALLOC = "<benchmark.internal.BenchmarkN: void alloc(int)>";
@@ -26,8 +29,9 @@ public class MemoryManager {
     private static final Logger LOG = LoggerFactory.getLogger(MemoryManager.class);
     private static final TreeMap<Integer, TreeSet<Integer>> result = new TreeMap<>();
     private static final Set<Integer> allocIds = new TreeSet<>();
-    private static final Map<Object, Map<String, Item>> id2f2s = new HashMap<>(); // allocId -> field -> pointSet
-    private static final Map<Object, String> id2type = new HashMap<>();           // allocId -> type
+    private static final Map<Integer, Map<String, Item>> id2f2s = new HashMap<>(); // allocId -> field -> pointSet
+    private static final Map<Integer, String> id2type = new HashMap<>();           // allocId -> type
+    private static final Map<String, Integer> static2Id = new HashMap<>();         // className.field -> allocId
     private static int nextAllocId = -1;
 
     public static int extractTest(InvokeExpr ie) {
@@ -68,15 +72,21 @@ public class MemoryManager {
     }
 
     public static int getNextImplicitAllocId() {
-        return nextAllocId--;
+        int id = nextAllocId--;
+        allocIds.add(id);
+        return id;
     }
 
-    public static void initStaticAllocId(String className, String fieldName, SootClass fieldClass) {
-        String id = className + "." + fieldName;
+    public static int initStaticAllocId(String className, String fieldName, SootClass fieldClass) {
+        String key = className + "." + fieldName;
+        if (static2Id.containsKey(key)) return static2Id.get(key);
+        int id = getNextImplicitAllocId();
+        static2Id.put(key, id);
         initAllocId(id, fieldClass);
+        return id;
     }
 
-    public static void initAllocId(Object id, SootClass c) {
+    public static void initAllocId(int id, SootClass c) {
         id2type.put(id, c.getName());
         id2f2s.put(id, new HashMap<>());
         id2f2s.get(id).put(THIS, new Item(c.getName(), new TreeSet<>()));
@@ -85,11 +95,39 @@ public class MemoryManager {
         }
     }
 
-    public static TreeSet<Integer> getPointToSet(Object id, String field) {
+    public static TreeSet<Integer> getPointToSet(int id, String field) {
         return id2f2s.get(id).get(field).points;
     }
 
-    public static TreeSet<Integer> getPointToSet(TreeSet<Integer> ids, String field) {
+    public static TreeSet<Integer> getPointToSet(Collection<Integer> ids, String field) {
+        TreeSet<Integer> result = new TreeSet<>();
+        for (Integer id : ids) {
+            result.addAll(getPointToSet(id, field));
+        }
+        return result;
+    }
 
+    public static void replacePointToSet(int id, String field, Collection<Integer> points) {
+        getPointToSet(id, field).clear();
+        getPointToSet(id, field).addAll(points);
+    }
+
+    public static void replacePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
+        for (Integer id : ids) {
+            getPointToSet(id, field).clear();
+            getPointToSet(id, field).addAll(points);
+        }
+    }
+
+    public static Map<Integer, Map<String, Item>> getMemAllocTable() {
+        return id2f2s;
+    }
+
+    public static int getStaticAllocId(String className, String fieldName) {
+        return static2Id.get(className + "." + fieldName);
+    }
+
+    public static Map<String, Integer> getStaticAllocIds() {
+        return static2Id;
     }
 }

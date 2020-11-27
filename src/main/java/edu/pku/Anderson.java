@@ -8,16 +8,21 @@ public class Anderson {
     private final Map<String, TreeSet<Integer>> pts = new HashMap<>();
 
     public void add(String key, Integer point) {
-        pts.get(key).add(point);
+        pts.computeIfAbsent(key, k -> new TreeSet<>()).add(point);
     }
 
     public void merge(String from, String to) {
-        pts.get(from).addAll(pts.get(to));
+        pts.computeIfAbsent(to, k -> new TreeSet<>()).addAll(pts.computeIfAbsent(from, k -> new TreeSet<>()));
     }
 
     public void replace(String from, String to) {
-        pts.get(from).clear();
-        pts.get(from).addAll(pts.get(to));
+        pts.computeIfAbsent(to, k -> new TreeSet<>()).clear();
+        pts.get(to).addAll(pts.computeIfAbsent(from, k -> new TreeSet<>()));
+    }
+
+    public void replaceWith(String key, Collection<Integer> points) {
+        pts.computeIfAbsent(key, k -> new TreeSet<>()).clear();
+        pts.get(key).addAll(points);
     }
 
     public void clear() {
