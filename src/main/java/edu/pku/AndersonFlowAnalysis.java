@@ -40,7 +40,10 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
     @Override
     protected Anderson newInitialFlow() {
         Anderson anderson = new Anderson();
-        if (initialAnderson != null) anderson.mergeAll(initialAnderson);
+        if (initialAnderson != null) {
+            anderson.mergeAll(initialAnderson);
+            anderson.setMemHash(initialAnderson.getMemHash());
+        }
         return anderson;
     }
 
@@ -48,6 +51,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
     protected void copy(Anderson src, Anderson dest) {
         dest.clear();
         dest.setCurrAllocId(src.getCurrAllocId());
+        dest.setMemHash(src.getMemHash());
         dest.mergeAll(src);
     }
 
@@ -58,6 +62,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
         if (in2.getCurrAllocId() != 0) out.setCurrAllocId(in2.getCurrAllocId());
         out.mergeAll(in1);
         out.mergeAll(in2);
+        out.setMemHash(in1.getMemHash() + in2.getMemHash());
     }
 
     @Override
@@ -138,7 +143,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
                 if (lhs.getBase() instanceof Local) {
                     if (ds.getRightOp() instanceof Local) { // a.f = b
-                        MemoryManager.replacePointToSet(
+                        MemoryManager.updatePointToSet(
                                 out.getPointToSet(lhs.getBase().toString()),
                                 lhs.getField().getName(),
                                 out.getPointToSet(ds.getRightOp().toString())
@@ -157,7 +162,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                         lhs.getField().getDeclaringClass()
                 );
                 if (ds.getRightOp() instanceof Local) {
-                    MemoryManager.replacePointToSet(
+                    MemoryManager.updatePointToSet(
                             id,
                             lhs.getField().getName(),
                             out.getPointToSet(ds.getRightOp().toString())
@@ -174,8 +179,12 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 out.merge(rs.getOp().toString(), "ret");
             }
             finalAnderson.mergeAll(out);
+            finalAnderson.setMemHash(finalAnderson.getMemHash() + MemoryManager.getMemHash());
         }
 
+        out.setMemHash(MemoryManager.getMemHash());
+
+        LOG.info("    Alloc ID = {}, Mem Hash = {}", out.getCurrAllocId(), Integer.toHexString(out.getMemHash()));
         LOG.info("    State Before: {}", in.getPointToSet());
         LOG.info("    State After: {}", out.getPointToSet());
         LOG.info("    Heap Table: {}", MemoryManager.getMemAllocTable());
@@ -195,6 +204,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
 
         DirectedGraph<Unit> thisGraph = new ExceptionalUnitGraph(method.retrieveActiveBody());
         Anderson initialState = new Anderson();
+        initialState.setMemHash(MemoryManager.getMemHash());
         for (int i = 0; i < ie.getArgs().size(); ++i) {
             Value v = ie.getArgs().get(i);
             initialState.mergeAll("arg" + i, out.getPointToSet(v.toString()));

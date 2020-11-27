@@ -5,6 +5,8 @@ import java.util.*;
 public class Anderson {
 
     private int currAllocId = 0;
+    private int memHash = 0;
+
     private final Map<String, TreeSet<Integer>> pts = new HashMap<>();
 
     @Override
@@ -12,12 +14,12 @@ public class Anderson {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Anderson anderson = (Anderson) o;
-        return Objects.equals(pts, anderson.pts);
+        return Objects.equals(pts, anderson.pts) && memHash == anderson.memHash;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pts);
+        return Objects.hash(pts, memHash);
     }
 
     public void add(String key, Integer point) {
@@ -58,6 +60,15 @@ public class Anderson {
 
     public void setCurrAllocId(int currAllocId) {
         this.currAllocId = currAllocId;
+    }
+
+
+    public int getMemHash() {
+        return memHash;
+    }
+
+    public void setMemHash(int memHash) {
+        this.memHash = memHash;
     }
 
     public Map<String, TreeSet<Integer>> getPointToSet() {

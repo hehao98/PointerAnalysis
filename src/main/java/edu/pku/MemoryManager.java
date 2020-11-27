@@ -20,8 +20,21 @@ public class MemoryManager {
             this.type = type;
             this.points = points;
         }
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return points.toString();
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Item item = (Item) o;
+            return Objects.equals(type, item.type) &&
+                    Objects.equals(points, item.points);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, points);
         }
     }
 
@@ -36,6 +49,10 @@ public class MemoryManager {
     private static final Map<String, Integer> static2Id = new HashMap<>();         // className.field -> allocId
     private static final Map<String, Integer> implicit2Id = new HashMap<>();       // className.method.unit -> allocId
     private static int nextAllocId = -1;
+
+    public static int getMemHash() {
+        return Objects.hash(allocIds, id2f2s, static2Id, implicit2Id);
+    }
 
     public static int extractTest(InvokeExpr ie) {
         if (ie.getMethod().toString().equals(TEST)) {
@@ -119,14 +136,14 @@ public class MemoryManager {
         return result;
     }
 
-    public static void replacePointToSet(int id, String field, Collection<Integer> points) {
-        getPointToSet(id, field).clear();
+    public static void updatePointToSet(int id, String field, Collection<Integer> points) {
+        //getPointToSet(id, field).clear();
         getPointToSet(id, field).addAll(points);
     }
 
-    public static void replacePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
+    public static void updatePointToSet(Collection<Integer> ids, String field, Collection<Integer> points) {
         for (Integer id : ids) {
-            getPointToSet(id, field).clear();
+            //getPointToSet(id, field).clear();
             getPointToSet(id, field).addAll(points);
         }
     }
