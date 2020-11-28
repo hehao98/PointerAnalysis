@@ -126,7 +126,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                     }
                 } else if (ds.getRightOp() instanceof ThisRef) {
                     out.replace("this", ds.getLeftOp().toString());
-                } else if (ds.getRightOp() instanceof StaticFieldRef) {
+                } else if (ds.getRightOp() instanceof StaticFieldRef) { // b = A.f
                     StaticFieldRef rhs = (StaticFieldRef) (ds.getRightOp());
                     int id = out.getMemory().initStaticAllocId(
                             rhs.getField().getDeclaringClass().getName(),
@@ -141,12 +141,12 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                 InstanceFieldRef lhs = (InstanceFieldRef) ds.getLeftOp();
                 if (lhs.getBase() instanceof Local) {
                     if (ds.getRightOp() instanceof Local) { // a.f = b
-                        LOG.info("{} ", out.getMemory().getMemAllocTable());
-                        LOG.info( "{} {} {}",
-                                out.getPointToSet(lhs.getBase().toString()),
-                                lhs.getField().getName(),
-                                out.getPointToSet(ds.getRightOp().toString())
-                        );
+                        //LOG.info("{} ", out.getMemory().getMemAllocTable());
+                        //LOG.info( "{} {} {}",
+                        //        out.getPointToSet(lhs.getBase().toString()),
+                        //        lhs.getField().getName(),
+                        //        out.getPointToSet(ds.getRightOp().toString())
+                        //);
                         out.getMemory().updatePointToSet(
                                 out.getPointToSet(lhs.getBase().toString()),
                                 lhs.getField().getName(),
@@ -165,7 +165,6 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
                         lhs.getField().getName(),
                         lhs.getField().getDeclaringClass()
                 );
-                LOG.info("{}", id);
                 if (ds.getRightOp() instanceof Local) {
                     out.getMemory().updatePointToSet(
                             id,

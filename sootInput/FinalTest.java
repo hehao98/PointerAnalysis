@@ -35,13 +35,17 @@ public class FinalTest {
 
     public static A bar(String[] args, A a1, A a2) {
         if (args.length > 0) {
+            a1.a = a2;
             return a1;
         }
+        a2.a = a1;
         return a2;
     }
 
     public static void main(String[] args) {
+        BenchmarkN.alloc(10);
         A a1 = new A();
+        BenchmarkN.alloc(20);
         A a2 = new A();
         BenchmarkN.alloc(1);
         B b1 = new B();
@@ -56,27 +60,28 @@ public class FinalTest {
         a.f = b3;
         BenchmarkN.test(1, a1.f);
         BenchmarkN.test(2, a2.f);
+        BenchmarkN.test(3, a.a);
 
         for (int i = 0; i < args.length; ++i) {
             if (i % 2 == 0) {
                 x = b2;
                 y = b3;
-                BenchmarkN.test(3, x);
-                BenchmarkN.test(4, y);
+                BenchmarkN.test(4, x);
+                BenchmarkN.test(5, y);
                 a.f = f1(x, i);
-                BenchmarkN.test(5, a1.f);
+                BenchmarkN.test(6, a1.f);
             } else {
                 x = b3;
                 y = b2;
-                BenchmarkN.test(6, x);
-                BenchmarkN.test(7, y);
+                BenchmarkN.test(7, x);
+                BenchmarkN.test(8, y);
                 a.f = f2(y);
-                BenchmarkN.test(8, a1.f);
+                BenchmarkN.test(9, a1.f);
             }
         }
-        BenchmarkN.test(9, a.f);
-        BenchmarkN.test(10, x);
-        BenchmarkN.test(11, y);
-        BenchmarkN.test(12, a.a.f);
+        BenchmarkN.test(10, a.f);
+        BenchmarkN.test(11, x);
+        BenchmarkN.test(12, y);
+        BenchmarkN.test(13, a.a.f);
     }
 }

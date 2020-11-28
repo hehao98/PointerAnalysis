@@ -11,9 +11,9 @@ res="---------- Evaluation Result Summary ----------"
 classes=( # Basic Tests
           "Hello" "Hello2" "FieldSensitivity2" "FlowSensitivity1" "FlowSensitivity2" "Recursion"
           "ContextSensitivity1" "Function" "Function2" "StaticFieldRef" "ImplicitAllocId" "Inheritance"
-          "ForLoop" "ForLoopComplex" "If" "WeakUpdate"
+          "ForLoop" "ForLoopComplex" "If" "WeakUpdate" "FieldInField"
           # Advanced Tests
-          "FieldSensitivity" "PointerInHeap" "RecursionComplex" "SuperTest")
+          "FieldSensitivity" "PointerInHeap" "RecursionComplex" "FinalTest")
 if [ "$#" -ge 1 ]
 then
     classes=( "$@" )

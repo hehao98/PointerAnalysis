@@ -167,6 +167,7 @@ public class MemoryManager {
         id2type.put(id, c.getName());
         id2f2s.put(id, new HashMap<>());
         id2f2s.get(id).put(THIS, new Item(c.getName(), new TreeSet<>()));
+        id2f2s.get(id).get(THIS).points.add(id);
         for (SootField field : c.getFields()) {
             id2f2s.get(id).put(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
         }/*
