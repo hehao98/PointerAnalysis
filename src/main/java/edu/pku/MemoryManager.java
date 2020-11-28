@@ -136,7 +136,7 @@ public class MemoryManager {
     }
 
     public int initStaticAllocId(String className, String fieldName, SootClass fieldClass) {
-        String key = className + "." + fieldName;
+        String key = className;
         int id;
         if (static2Id.containsKey(key)) {
             id = static2Id.get(key);

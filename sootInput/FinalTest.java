@@ -15,7 +15,7 @@ public class FinalTest {
     public static A a;
 
     public static B f1(B b, int i) {
-        if (i % 3 == 0) {
+        if (i % 3 == 1) {
             BenchmarkN.alloc(6);
             B c = new B();
             x = c;
@@ -34,7 +34,7 @@ public class FinalTest {
     }
 
     public static A bar(String[] args, A a1, A a2) {
-        if (args.length > 0) {
+        if (args.length > 4) {
             a1.a = a2;
             return a1;
         }
