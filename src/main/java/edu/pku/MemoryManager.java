@@ -169,14 +169,14 @@ public class MemoryManager {
         id2f2s.get(id).put(THIS, new Item(c.getName(), new TreeSet<>()));
         for (SootField field : c.getFields()) {
             id2f2s.get(id).put(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
-        }
+        }/*
         while (c.hasSuperclass()) {
             c = c.getSuperclass();
-            if (c.isJavaLibraryClass()) break;
+            //if (c.isJavaLibraryClass()) break;
             for (SootField field : c.getFields()) {
-                id2f2s.get(id).put(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
+                id2f2s.get(id).putIfAbsent(field.getName(), new Item(field.getType().toString(), new TreeSet<>()));
             }
-        }
+        }*/
     }
 
     public Set<Integer> getPointToSet(int id, String field) {
@@ -192,7 +192,7 @@ public class MemoryManager {
     }
 
     public void updatePointToSet(int id, String field, Collection<Integer> points) {
-        //getPointToSet(id, field).clear();
+        getPointToSet(id, field).clear();
         getPointToSet(id, field).addAll(points);
     }
 

@@ -108,6 +108,7 @@ public class WholeProgramTransformer extends SceneTransformer {
                     answer.append(" ").append(i);
                 }
             } else {
+                answer.append(" ").append(0);
                 for (Integer i : allocIds) {
                     if (i > 0) answer.append(" ").append(i);
                 }

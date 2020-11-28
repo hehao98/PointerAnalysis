@@ -204,7 +204,7 @@ public class AndersonFlowAnalysis extends ForwardFlowAnalysis<Unit, Anderson> {
             if (prev.toString().equals(method.toString()))
                 duplicateMethodCount++;
         }
-        if (duplicateMethodCount > 3) return;
+        if (duplicateMethodCount > 1) return;
 
         DirectedGraph<Unit> thisGraph = new ExceptionalUnitGraph(method.retrieveActiveBody());
         Anderson initialState = new Anderson();
